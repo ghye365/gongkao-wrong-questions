@@ -295,6 +295,67 @@ body {
 @media (min-width: 769px) {
   .quiz-setup { padding: 40px 0; }
 }
+
+/* ===== Sync Page ===== */
+.sync-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--shadow);
+  margin-bottom: 20px;
+}
+.sync-card h3 {
+  font-size: 16px;
+  margin-bottom: 16px;
+  color: var(--primary-dark);
+}
+.sync-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.sync-status-item {
+  background: var(--primary-lighter);
+  border-radius: var(--radius-sm);
+  padding: 12px 20px;
+  text-align: center;
+  flex: 1;
+  min-width: 120px;
+}
+.sync-status-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--primary-dark);
+}
+.sync-status-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+.sync-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+.sync-log {
+  margin-top: 16px;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--primary-lighter);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--text-secondary);
+}
+.sync-log-entry { padding: 2px 0; }
+.sync-link {
+  color: var(--primary-dark);
+  text-decoration: underline;
+  cursor: pointer;
+}
 </style>
 </head>
 <body>
@@ -307,6 +368,7 @@ body {
     <button class="nav-tab" data-page="page-input" onclick="showPage('page-input')">录入错题</button>
     <button class="nav-tab" data-page="page-redo" onclick="showPage('page-redo')">错题重做</button>
     <button class="nav-tab" data-page="page-report" onclick="showPage('page-report')">分析报告</button>
+    <button class="nav-tab" data-page="page-sync" onclick="showPage('page-sync')">云同步</button>
   </div>
 </nav>
 
@@ -467,6 +529,64 @@ body {
           <div class="chart-box" id="chartTodayError"></div>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Sync Page ===== -->
+<div id="page-sync" class="page">
+  <div class="container">
+    <div class="page-header">
+      <h2>云同步</h2>
+      <div class="subtitle">多设备数据同步，基于 JSONBin 免费云存储</div>
+    </div>
+    <div class="sync-card">
+      <h3>配置</h3>
+      <div class="form-group">
+        <label class="form-label">JSONBin Master Key</label>
+        <input type="text" class="form-input" id="syncApiKey" placeholder="粘贴你的 JSONBin X-Master-Key">
+        <div style="font-size:12px;color:var(--text-secondary);margin-top:6px">
+          还没有 Key？去 <span class="sync-link" onclick="window.open('https://jsonbin.io/api-keys','_blank')">jsonbin.io</span> 免费注册，在 API Keys 页面复制 Master Key
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Bin ID（自动生成，无需手动填写）</label>
+        <input type="text" class="form-input" id="syncBinId" placeholder="首次同步时自动创建" readonly>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" onclick="saveSyncConfig()">保存配置</button>
+      </div>
+    </div>
+    <div class="sync-card">
+      <h3>数据状态</h3>
+      <div class="sync-status">
+        <div class="sync-status-item">
+          <div class="sync-status-value" id="syncLocalCount">—</div>
+          <div class="sync-status-label">本地错题</div>
+        </div>
+        <div class="sync-status-item">
+          <div class="sync-status-value" id="syncCloudCount">—</div>
+          <div class="sync-status-label">云端错题</div>
+        </div>
+        <div class="sync-status-item">
+          <div class="sync-status-value" id="syncLastTime">—</div>
+          <div class="sync-status-label">上次同步</div>
+        </div>
+      </div>
+    </div>
+    <div class="sync-card">
+      <h3>同步操作</h3>
+      <div class="sync-actions">
+        <button class="btn btn-primary" onclick="syncSmart()">智能同步（推荐）</button>
+        <button class="btn btn-secondary" onclick="syncPush()">上传到云端</button>
+        <button class="btn btn-secondary" onclick="syncPull()">从云端恢复</button>
+      </div>
+      <div style="font-size:13px;color:var(--text-secondary);margin-top:12px">
+        <strong>智能同步</strong>：合并本地和云端数据，去重后双向同步<br>
+        <strong>上传</strong>：将本地数据覆盖到云端<br>
+        <strong>恢复</strong>：用云端数据覆盖本地（会清空当前本地数据）
+      </div>
+      <div class="sync-log" id="syncLog"></div>
     </div>
   </div>
 </div>
@@ -647,6 +767,7 @@ function showPage(pageId) {
     case 'page-input': initInputPage(); break;
     case 'page-redo': initRedoPage(); break;
     case 'page-report': renderReport(); break;
+    case 'page-sync': initSyncPage(); break;
   }
 }
 
@@ -1105,6 +1226,227 @@ async function renderReport() {
       grid: { left: 30, right: 16, bottom: 40, top: 16 }
     });
   }
+}
+
+// ==================== 云同步（JSONBin） ====================
+const JSONBIN_BASE = 'https://api.jsonbin.io/v3';
+let syncBusy = false;
+
+function getSyncConfig() {
+  return {
+    apiKey: localStorage.getItem('jsonbin_api_key') || '',
+    binId: localStorage.getItem('jsonbin_bin_id') || '',
+    lastSync: localStorage.getItem('jsonbin_last_sync') || ''
+  };
+}
+
+function genUUID() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+
+function syncLog(msg) {
+  const log = document.getElementById('syncLog');
+  const time = new Date().toLocaleTimeString('zh-CN');
+  const entry = document.createElement('div');
+  entry.className = 'sync-log-entry';
+  entry.textContent = `[${time}] ${msg}`;
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
+}
+
+async function jsonbinRequest(method, path, body) {
+  const config = getSyncConfig();
+  if (!config.apiKey) throw new Error('未配置 API Key');
+  const headers = {
+    'Content-Type': 'application/json',
+    'X-Master-Key': config.apiKey
+  };
+  const opts = { method, headers };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(`${JSONBIN_BASE}${path}`, opts);
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`JSONBin ${res.status}: ${err}`);
+  }
+  return res.json();
+}
+
+async function ensureBinId() {
+  const config = getSyncConfig();
+  if (config.binId) return config.binId;
+  syncLog('首次使用，正在创建云端数据仓库...');
+  const result = await jsonbinRequest('POST', '/b', {
+    questions: [],
+    practiceLogs: [],
+    createdAt: Date.now()
+  });
+  const binId = result.metadata.id;
+  localStorage.setItem('jsonbin_bin_id', binId);
+  document.getElementById('syncBinId').value = binId;
+  syncLog(`云端仓库已创建，Bin ID: ${binId}`);
+  return binId;
+}
+
+async function getCloudData() {
+  const config = getSyncConfig();
+  if (!config.binId) return { questions: [], practiceLogs: [] };
+  const result = await jsonbinRequest('GET', `/b/${config.binId}/latest`);
+  const record = result.record || {};
+  return {
+    questions: record.questions || [],
+    practiceLogs: record.practiceLogs || []
+  };
+}
+
+async function putCloudData(data) {
+  const config = getSyncConfig();
+  if (!config.binId) throw new Error('Bin ID 不存在');
+  await jsonbinRequest('PUT', `/b/${config.binId}`, data);
+}
+
+async function initSyncPage() {
+  const config = getSyncConfig();
+  document.getElementById('syncApiKey').value = config.apiKey;
+  document.getElementById('syncBinId').value = config.binId;
+  document.getElementById('syncLastTime').textContent = config.lastSync
+    ? new Date(Number(config.lastSync)).toLocaleString('zh-CN')
+    : '—';
+  const localQ = await dbGetAll(STORE_Q);
+  document.getElementById('syncLocalCount').textContent = localQ.length;
+  if (config.apiKey && config.binId) {
+    try {
+      const cloud = await getCloudData();
+      document.getElementById('syncCloudCount').textContent = (cloud.questions || []).length;
+    } catch(e) {
+      document.getElementById('syncCloudCount').textContent = '—';
+    }
+  }
+}
+
+function saveSyncConfig() {
+  const apiKey = document.getElementById('syncApiKey').value.trim();
+  if (!apiKey) { showToast('请输入 API Key'); return; }
+  localStorage.setItem('jsonbin_api_key', apiKey);
+  showToast('配置已保存');
+  initSyncPage();
+}
+
+function ensureUUIDs(questions) {
+  questions.forEach(q => {
+    if (!q.syncId) q.syncId = genUUID();
+  });
+  return questions;
+}
+
+function mergeQuestions(local, cloud) {
+  const map = {};
+  local.forEach(q => { if (q.syncId) map[q.syncId] = { ...q }; });
+  cloud.forEach(q => {
+    if (!q.syncId) return;
+    if (!map[q.syncId]) {
+      map[q.syncId] = { ...q };
+    } else {
+      const lp = map[q.syncId].lastPracticeTime || 0;
+      const cp = q.lastPracticeTime || 0;
+      if (cp > lp) map[q.syncId] = { ...q };
+    }
+  });
+  return Object.values(map);
+}
+
+function mergeLogs(local, cloud) {
+  const seen = new Set(local.map(l => l.sessionId + '_' + l.questionId));
+  return [...local, ...cloud.filter(l => !seen.has(l.sessionId + '_' + l.questionId))];
+}
+
+async function syncPush() {
+  if (syncBusy) return;
+  syncBusy = true;
+  try {
+    syncLog('开始上传...');
+    await ensureBinId();
+    const localQ = ensureUUIDs(await dbGetAll(STORE_Q));
+    const localP = await dbGetAll(STORE_P);
+    for (const q of localQ) {
+      const existing = await dbGetBySyncId(q.syncId);
+      if (existing && existing.id !== q.id) await dbPut(STORE_Q, q);
+    }
+    await putCloudData({ questions: localQ, practiceLogs: localP, updatedAt: Date.now() });
+    localStorage.setItem('jsonbin_last_sync', Date.now().toString());
+    syncLog(`上传完成：${localQ.length} 道错题，${localP.length} 条练习记录`);
+    showToast('上传成功');
+    initSyncPage();
+  } catch(e) {
+    syncLog('上传失败：' + e.message);
+    showToast('上传失败');
+  } finally {
+    syncBusy = false;
+  }
+}
+
+async function syncPull() {
+  if (syncBusy) return;
+  if (!confirm('确定要从云端恢复吗？这将清空本地当前数据。')) return;
+  syncBusy = true;
+  try {
+    syncLog('开始从云端恢复...');
+    const cloud = await getCloudData();
+    const allLocal = await dbGetAll(STORE_Q);
+    for (const q of allLocal) await dbDelete(STORE_Q, q.id);
+    const allLogs = await dbGetAll(STORE_P);
+    for (const l of allLogs) await dbDelete(STORE_P, l.id);
+    for (const q of (cloud.questions || [])) { delete q.id; await dbAdd(STORE_Q, q); }
+    for (const l of (cloud.practiceLogs || [])) { delete l.id; await dbAdd(STORE_P, l); }
+    localStorage.setItem('jsonbin_last_sync', Date.now().toString());
+    syncLog(`恢复完成：${(cloud.questions||[]).length} 道错题，${(cloud.practiceLogs||[]).length} 条练习记录`);
+    showToast('恢复成功');
+    initSyncPage();
+  } catch(e) {
+    syncLog('恢复失败：' + e.message);
+    showToast('恢复失败');
+  } finally {
+    syncBusy = false;
+  }
+}
+
+async function syncSmart() {
+  if (syncBusy) return;
+  syncBusy = true;
+  try {
+    syncLog('开始智能同步...');
+    await ensureBinId();
+    const localQ = ensureUUIDs(await dbGetAll(STORE_Q));
+    const localP = await dbGetAll(STORE_P);
+    for (const q of localQ) { const ex = await dbGetBySyncId(q.syncId); if (ex && ex.id !== q.id) await dbPut(STORE_Q, q); }
+    syncLog(`本地：${localQ.length} 道错题`);
+    const cloud = await getCloudData();
+    syncLog(`云端：${(cloud.questions||[]).length} 道错题`);
+    const mergedQ = mergeQuestions(localQ, cloud.questions || []);
+    const mergedP = mergeLogs(localP, cloud.practiceLogs || []);
+    syncLog(`合并后：${mergedQ.length} 道错题，${mergedP.length} 条练习记录`);
+    await putCloudData({ questions: mergedQ, practiceLogs: mergedP, updatedAt: Date.now() });
+    syncLog('云端已更新，开始同步到本地...');
+    const allLocal = await dbGetAll(STORE_Q);
+    for (const q of allLocal) await dbDelete(STORE_Q, q.id);
+    const allLogs = await dbGetAll(STORE_P);
+    for (const l of allLogs) await dbDelete(STORE_P, l.id);
+    for (const q of mergedQ) { delete q.id; await dbAdd(STORE_Q, q); }
+    for (const l of mergedP) { delete l.id; await dbAdd(STORE_P, l); }
+    localStorage.setItem('jsonbin_last_sync', Date.now().toString());
+    syncLog('智能同步完成！');
+    showToast('同步成功');
+    initSyncPage();
+  } catch(e) {
+    syncLog('同步失败：' + e.message);
+    showToast('同步失败');
+  } finally {
+    syncBusy = false;
+  }
+}
+
+async function dbGetBySyncId(syncId) {
+  const all = await dbGetAll(STORE_Q);
+  return all.find(q => q.syncId === syncId);
 }
 
 // ==================== 初始化 ====================
