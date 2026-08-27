@@ -276,6 +276,7 @@ body {
 .report-section h3 { font-size: 13px; margin-bottom: 6px; }
 
 /* ===== Responsive ===== */
+/* iPhone 竖屏极简模式 */
 @media (max-width: 768px) {
   .navbar-brand { font-size: 16px; margin-right: 10px; }
   .nav-tab { padding: 6px 10px; font-size: 13px; }
@@ -295,10 +296,54 @@ body {
   .page-header { margin-bottom: 12px; }
   .page-header h2 { font-size: 18px; }
   .page-header .subtitle { font-size: 12px; }
+  /* 错题列表单列 */
+  .question-list-grid { display: block; }
+  /* 报告页单列 */
+  .report-charts-grid { display: block; }
+  /* 同步页堆叠 */
+  .sync-grid { display: block; }
 }
+/* iPad 横屏饱满模式 */
 @media (min-width: 769px) {
-  .quiz-setup { padding: 40px 0; }
-  .stats-grid { max-width: 600px; }
+  .quiz-setup { padding: 30px 0; }
+  .container { max-width: 1100px; margin: 0 auto; }
+  /* 首页：错题列表双列 */
+  .question-list-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .question-list-grid .question-card { margin-bottom: 0; }
+  /* 报告页：三栏并排 */
+  .report-charts-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; }
+  .report-charts-grid .chart-card { margin-bottom: 0; }
+  /* 同步页：三栏并排 */
+  .sync-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; align-items: start; }
+  .sync-grid .sync-card { margin-bottom: 0; }
+  /* 图表高度增大 */
+  .chart-box { height: 160px; }
+  /* 统计卡片放大 */
+  .stat-card { padding: 16px 12px; }
+  .stat-card-value { font-size: 24px; }
+  .stat-card-label { font-size: 12px; }
+  /* 错题卡片放大 */
+  .question-card { padding: 14px 16px; margin-bottom: 0; }
+  .question-content { font-size: 13px; -webkit-line-clamp: 3; max-height: 80px; }
+  .category-path { font-size: 11px; }
+  .question-meta { font-size: 12px; }
+  .answer-badge { font-size: 12px; padding: 2px 10px; }
+  .tag { font-size: 12px; padding: 2px 10px; }
+  /* 同步卡片放大 */
+  .sync-card { padding: 16px; }
+  .sync-card h3 { font-size: 14px; }
+  .sync-status-value { font-size: 20px; }
+  .sync-status-label { font-size: 11px; }
+  .sync-actions .btn { padding: 10px 8px; font-size: 13px; }
+  .sync-log { font-size: 12px; max-height: 60px; }
+  .report-stat-value { font-size: 28px; }
+  .report-stat-label { font-size: 12px; }
+  .report-section h3 { font-size: 15px; }
+  .chart-card h3 { font-size: 13px; }
+  .list-count { font-size: 14px; }
+  .list-count span { font-size: 16px; }
+  .list-filter { font-size: 13px; padding: 5px 14px; }
+  .list-toolbar { margin-bottom: 12px; }
 }
 
 /* ===== Sync Page ===== */
@@ -452,7 +497,7 @@ body {
         <div class="chart-box" id="chartErrorBar"></div>
       </div>
     </div>
-    <div id="questionList"></div>
+    <div class="question-list-grid" id="questionList"></div>
   </div>
 </div>
 
@@ -555,22 +600,19 @@ body {
           <div class="report-stat-value" id="totalAccuracy">—</div>
         </div>
       </div>
+    </div>
+    <div class="report-charts-grid">
       <div class="chart-card">
         <h3>正确率趋势</h3>
         <div class="chart-box" id="chartAccuracyTrend"></div>
       </div>
-    </div>
-    <div class="report-section">
-      <h3>今日录入错题分析</h3>
-      <div class="list-charts">
-        <div class="chart-card">
-          <h3>今日题型分布</h3>
-          <div class="chart-box" id="chartTodayModule"></div>
-        </div>
-        <div class="chart-card">
-          <h3>今日易错点</h3>
-          <div class="chart-box" id="chartTodayError"></div>
-        </div>
+      <div class="chart-card">
+        <h3>今日题型分布</h3>
+        <div class="chart-box" id="chartTodayModule"></div>
+      </div>
+      <div class="chart-card">
+        <h3>今日易错点</h3>
+        <div class="chart-box" id="chartTodayError"></div>
       </div>
     </div>
   </div>
@@ -579,43 +621,45 @@ body {
 <!-- ===== Sync Page ===== -->
 <div id="page-sync" class="page">
   <div class="container">
-    <div class="sync-card">
-      <h3>同步操作</h3>
-      <div class="sync-actions">
-        <button class="btn btn-primary" onclick="syncSmart()">智能同步</button>
-        <button class="btn btn-secondary" onclick="syncPush()">上传</button>
-        <button class="btn btn-secondary" onclick="syncPull()">恢复</button>
-      </div>
-      <div class="sync-log" id="syncLog"></div>
-    </div>
-    <div class="sync-card">
-      <h3>数据状态</h3>
-      <div class="sync-status">
-        <div class="sync-status-item">
-          <div class="sync-status-value" id="syncLocalCount">—</div>
-          <div class="sync-status-label">本地错题</div>
+    <div class="sync-grid">
+      <div class="sync-card">
+        <h3>同步操作</h3>
+        <div class="sync-actions">
+          <button class="btn btn-primary" onclick="syncSmart()">智能同步</button>
+          <button class="btn btn-secondary" onclick="syncPush()">上传</button>
+          <button class="btn btn-secondary" onclick="syncPull()">恢复</button>
         </div>
-        <div class="sync-status-item">
-          <div class="sync-status-value" id="syncCloudCount">—</div>
-          <div class="sync-status-label">云端错题</div>
-        </div>
-        <div class="sync-status-item">
-          <div class="sync-status-value" id="syncLastTime">—</div>
-          <div class="sync-status-label">上次同步</div>
+        <div class="sync-log" id="syncLog"></div>
+      </div>
+      <div class="sync-card">
+        <h3>数据状态</h3>
+        <div class="sync-status">
+          <div class="sync-status-item">
+            <div class="sync-status-value" id="syncLocalCount">—</div>
+            <div class="sync-status-label">本地错题</div>
+          </div>
+          <div class="sync-status-item">
+            <div class="sync-status-value" id="syncCloudCount">—</div>
+            <div class="sync-status-label">云端错题</div>
+          </div>
+          <div class="sync-status-item">
+            <div class="sync-status-value" id="syncLastTime">—</div>
+            <div class="sync-status-label">上次同步</div>
+          </div>
         </div>
       </div>
-    </div>
-    <div class="sync-card">
-      <h3>同步额度</h3>
-      <div class="usage-bar-row">
-        <span class="usage-bar-label">本月请求</span>
-        <div class="usage-bar-track"><div class="usage-bar-fill" id="usageApiBar" style="width:0%;background:#D4A5A5"></div></div>
-        <span class="usage-bar-num" id="usageApiNum">— / 10,000</span>
-      </div>
-      <div class="usage-bar-row">
-        <span class="usage-bar-label">存储用量</span>
-        <div class="usage-bar-track"><div class="usage-bar-fill" id="usageStorageBar" style="width:0%;background:#8BAC8B"></div></div>
-        <span class="usage-bar-num" id="usageStorageNum">— / 100 KB</span>
+      <div class="sync-card">
+        <h3>同步额度</h3>
+        <div class="usage-bar-row">
+          <span class="usage-bar-label">请求</span>
+          <div class="usage-bar-track"><div class="usage-bar-fill" id="usageApiBar" style="width:0%;background:#D4A5A5"></div></div>
+          <span class="usage-bar-num" id="usageApiNum">— / 10,000</span>
+        </div>
+        <div class="usage-bar-row">
+          <span class="usage-bar-label">存储</span>
+          <div class="usage-bar-track"><div class="usage-bar-fill" id="usageStorageBar" style="width:0%;background:#8BAC8B"></div></div>
+          <span class="usage-bar-num" id="usageStorageNum">— / 100 KB</span>
+        </div>
       </div>
     </div>
     <div class="sync-card">
