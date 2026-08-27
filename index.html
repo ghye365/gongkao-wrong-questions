@@ -313,10 +313,10 @@ body {
   /* 报告页：三栏并排 */
   .report-charts-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; }
   .report-charts-grid .chart-card { margin-bottom: 0; }
-  /* 同步页：两栏并排 */
-  .sync-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+  /* 同步页：三栏并排 */
+  .sync-grid { display: grid; grid-template-columns: 1.2fr 1fr 0.8fr; gap: 16px; align-items: start; }
   .sync-grid .sync-card { margin-bottom: 0; }
-  .sync-log { max-height: 180px; }
+  .sync-log { max-height: 200px; }
   /* 图表高度增大 */
   .chart-box { height: 160px; }
   /* 统计卡片放大 */
@@ -332,11 +332,7 @@ body {
   .tag { font-size: 12px; padding: 2px 10px; }
   /* 同步卡片放大 */
   .sync-card { padding: 16px; }
-  .sync-card h3 { font-size: 14px; }
-  .sync-status-value { font-size: 20px; }
-  .sync-status-label { font-size: 11px; }
-  .sync-actions .btn { padding: 10px 8px; font-size: 13px; }
-  .sync-log { font-size: 12px; max-height: 60px; }
+  .sync-log { font-size: 12px; }
   .report-stat-value { font-size: 28px; }
   .report-stat-label { font-size: 12px; }
   .report-section h3 { font-size: 15px; }
@@ -404,36 +400,6 @@ body {
 }
 
 /* ===== 同步操作卡片 ===== */
-.op-btn-row {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.op-btn {
-  padding: 12px 0;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.op-btn-primary {
-  background: var(--primary);
-  color: #fff;
-}
-.op-btn-primary:hover { background: var(--primary-dark); }
-.op-btn-secondary {
-  background: var(--primary-lighter);
-  color: var(--primary-dark);
-}
-.op-btn-secondary:hover { background: var(--primary-light); }
-.op-log-label {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
-}
 .sync-log {
   background: var(--primary-lighter);
   border-radius: var(--radius-sm);
@@ -534,6 +500,122 @@ body {
   color: var(--primary-dark);
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* ===== 同步操作卡片优化 ===== */
+.op-card {
+  display: flex;
+  flex-direction: column;
+}
+.op-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.op-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  flex-shrink: 0;
+}
+.op-status-dot.offline { background: #ccc; }
+.op-btn-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.op-btn {
+  padding: 14px 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.op-btn-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+.op-btn-sub {
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.8;
+}
+.op-btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+.op-btn-primary:hover { background: var(--primary-dark); }
+.op-btn-secondary {
+  background: var(--primary-lighter);
+  color: var(--primary-dark);
+}
+.op-btn-secondary:hover { background: var(--primary-light); }
+.op-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+.op-log-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.op-log-clear {
+  font-size: 11px;
+  color: var(--primary-dark);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* ===== 同步额度卡片 ===== */
+.usage-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.usage-bar-row:last-child { margin-bottom: 0; }
+.usage-bar-label {
+  font-size: 12px;
+  color: var(--text);
+  width: 32px;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+.usage-bar-track {
+  flex: 1;
+  height: 8px;
+  background: var(--primary-lighter);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.usage-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s;
+}
+.usage-bar-num {
+  font-size: 11px;
+  color: var(--text-secondary);
+  width: 90px;
+  text-align: right;
+  flex-shrink: 0;
+  font-family: monospace;
 }
 
 /* ===== Edit Modal ===== */
@@ -753,12 +835,32 @@ body {
       <!-- 同步操作 -->
       <div class="sync-card op-card">
         <div class="sync-card-title">同步操作</div>
-        <div class="op-btn-row">
-          <button class="op-btn op-btn-primary" onclick="syncSmart()">智能同步</button>
-          <button class="op-btn op-btn-secondary" onclick="syncPush()">上传</button>
-          <button class="op-btn op-btn-secondary" onclick="syncPull()">恢复</button>
+        <div class="op-status">
+          <span class="op-status-dot" id="syncStatusDot"></span>
+          <span id="syncStatusText">未连接</span>
         </div>
-        <div class="op-log-label">同步日志</div>
+        <div class="op-btn-row">
+          <button class="op-btn op-btn-primary" onclick="syncSmart()">
+            <span class="op-btn-icon">⇅</span>
+            <span>智能同步</span>
+            <span class="op-btn-sub">合并双向</span>
+          </button>
+          <button class="op-btn op-btn-secondary" onclick="syncPush()">
+            <span class="op-btn-icon">↑</span>
+            <span>上传</span>
+            <span class="op-btn-sub">覆盖云端</span>
+          </button>
+          <button class="op-btn op-btn-secondary" onclick="syncPull()">
+            <span class="op-btn-icon">↓</span>
+            <span>恢复</span>
+            <span class="op-btn-sub">覆盖本地</span>
+          </button>
+        </div>
+        <div class="op-hint">智能同步：合并本地和云端数据，自动去重；上传/恢复为单向覆盖操作</div>
+        <div class="op-log-label">
+          <span>同步日志</span>
+          <span class="op-log-clear" onclick="document.getElementById('syncLog').innerHTML=''">清空</span>
+        </div>
         <div class="sync-log" id="syncLog"></div>
       </div>
       <!-- 数据状态 -->
@@ -783,6 +885,20 @@ body {
           <div class="md-list" id="moduleBreakdown">
             <!-- JS 动态渲染 -->
           </div>
+        </div>
+      </div>
+      <!-- 同步额度 -->
+      <div class="sync-card usage-card">
+        <div class="sync-card-title">同步额度</div>
+        <div class="usage-bar-row">
+          <span class="usage-bar-label">请求</span>
+          <div class="usage-bar-track"><div class="usage-bar-fill" id="usageApiBar" style="width:0%;background:var(--primary)"></div></div>
+          <span class="usage-bar-num" id="usageApiNum">— / 10,000</span>
+        </div>
+        <div class="usage-bar-row">
+          <span class="usage-bar-label">存储</span>
+          <div class="usage-bar-track"><div class="usage-bar-fill" id="usageStorageBar" style="width:0%;background:var(--green)"></div></div>
+          <span class="usage-bar-num" id="usageStorageNum">— / 600 KB</span>
         </div>
       </div>
     </div>
@@ -2013,15 +2129,24 @@ async function initSyncPage() {
   renderModuleBreakdown(localQ);
   // 获取云端数量
   const cloudCountEl = document.getElementById('syncCloudCount');
+  const dotEl = document.getElementById('syncStatusDot');
+  const statusTextEl = document.getElementById('syncStatusText');
   if (config.apiKey && config.collectionId) {
     try {
       const cloud = await getCloudData();
       if (cloudCountEl) cloudCountEl.textContent = (cloud.questions || []).length;
+      if (dotEl) { dotEl.classList.remove('offline'); }
+      if (statusTextEl) statusTextEl.textContent = '已连接云端';
+      fetchUsage();
     } catch(e) {
       if (cloudCountEl) cloudCountEl.textContent = '—';
+      if (dotEl) { dotEl.classList.add('offline'); }
+      if (statusTextEl) statusTextEl.textContent = '连接失败';
     }
   } else {
     if (cloudCountEl) cloudCountEl.textContent = '—';
+    if (dotEl) { dotEl.classList.add('offline'); }
+    if (statusTextEl) statusTextEl.textContent = config.apiKey ? '未同步过' : '未配置';
   }
 }
 
