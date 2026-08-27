@@ -1773,6 +1773,15 @@ const JSONBIN_BASE = 'https://api.jsonbin.io/v3';
 const SYNC_LOOKUP_BIN = '6a8f92abf5f4af5e29476ee7';
 const MODULE_NAMES = ['常识判断', '言语理解与表达', '数量关系', '判断推理', '资料分析'];
 const LOG_BIN_NAME = '练习记录';
+// JSONBin X-Bin-Name 不支持中文，用英文映射
+const BIN_NAME_MAP = {
+  '常识判断': 'changshi',
+  '言语理解与表达': 'yanyu',
+  '数量关系': 'shuliang',
+  '判断推理': 'panduan',
+  '资料分析': 'ziliao',
+  '练习记录': 'practice-logs'
+};
 let syncBusy = false;
 
 function getSyncConfig() {
@@ -1857,16 +1866,17 @@ async function createCollection(name) {
   return res.json();
 }
 
-// 创建 Bin 并关联到 Collection
+// 创建 Bin 并关联到 Collection（英文名称避免乱码）
 async function createBinWithCollection(collectionId, name, data) {
   const config = getSyncConfig();
+  const binName = BIN_NAME_MAP[name] || name;
   const res = await fetch(`${JSONBIN_BASE}/b`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-Master-Key': config.apiKey,
       'X-Collection-Id': collectionId,
-      'X-Bin-Name': name
+      'X-Bin-Name': binName
     },
     body: JSON.stringify(data)
   });
@@ -1907,10 +1917,8 @@ async function ensureCollectionAndBins() {
     const entry = map[config.syncCode];
     if (entry) {
       if (typeof entry === 'string') {
-        // 旧格式：直接是 collectionId
         collectionId = entry;
       } else if (typeof entry === 'object') {
-        // 新格式：{ collectionId, binIds }
         collectionId = entry.collectionId || '';
         binIds = entry.binIds || {};
       }
@@ -1920,13 +1928,29 @@ async function ensureCollectionAndBins() {
     syncLog('查找配置失败: ' + e.message);
   }
 
+  // 1.5 验证 Collection 是否有效
+  if (collectionId) {
+    try {
+      await jsonbinRequest('GET', `/c/${collectionId}/bins`);
+    } catch(e) {
+      syncLog('Collection 无效或不可访问，将重新创建...');
+      collectionId = '';
+      binIds = {};
+    }
+  }
+
   // 2. 如果没有 collectionId，创建 Collection
   if (!collectionId) {
     syncLog('正在创建集合...');
-    const colResult = await createCollection('gongkao-' + config.syncCode);
-    collectionId = colResult.record || '';
-    if (!collectionId) throw new Error('创建集合失败：未返回 Collection ID');
-    syncLog('集合已创建: ' + collectionId);
+    try {
+      const colResult = await createCollection('gongkao-' + config.syncCode);
+      collectionId = colResult.record || '';
+      if (!collectionId) throw new Error('未返回 Collection ID');
+      syncLog('集合已创建: ' + collectionId);
+    } catch(e) {
+      syncLog('创建集合失败: ' + e.message);
+      throw new Error('创建集合失败。免费用户只能创建1个集合，请到 jsonbin.io 删除旧集合后重试');
+    }
   }
 
   // 3. 检查缺失的 Bin，补齐
