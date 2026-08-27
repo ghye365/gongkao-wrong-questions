@@ -1282,7 +1282,6 @@ async function jsonbinRequest(method, path, body, useLookupKey) {
 
 async function ensureBinId() {
   const config = getSyncConfig();
-  if (config.binId) return config.binId;
   if (!config.syncCode) throw new Error('请先填写同步码');
   syncLog('正在查找云端仓库（同步码: ' + config.syncCode + '）...');
   try {
@@ -1291,12 +1290,18 @@ async function ensureBinId() {
     const binId = map[config.syncCode];
     if (binId) {
       syncLog(`找到已有云端仓库，Bin ID: ${binId}`);
-      localStorage.setItem('jsonbin_bin_id', binId);
-      document.getElementById('syncBinId').value = binId;
+      if (config.binId !== binId) {
+        localStorage.setItem('jsonbin_bin_id', binId);
+        document.getElementById('syncBinId').value = binId;
+      }
       return binId;
     }
   } catch(e) {
-    syncLog('查找仓库失败，将创建新仓库...');
+    syncLog('查找仓库失败: ' + e.message + '，将创建新仓库...');
+  }
+  if (config.binId) {
+    syncLog('使用本地已保存的 Bin ID: ' + config.binId);
+    return config.binId;
   }
   syncLog('未找到对应仓库，正在创建...');
   const result = await jsonbinRequest('POST', '/b', {
@@ -1420,14 +1425,13 @@ async function syncPush() {
   syncBusy = true;
   try {
     syncLog('开始上传...');
-    await ensureBinId();
-    const localQ = ensureUUIDs(await dbGetAll(STORE_Q));
+    const binId = await ensureBinId();
+    let localQ = ensureUUIDs(await dbGetAll(STORE_Q));
+    for (const q of localQ) await dbPut(STORE_Q, q);
     const localP = await dbGetAll(STORE_P);
-    for (const q of localQ) {
-      const existing = await dbGetBySyncId(q.syncId);
-      if (existing && existing.id !== q.id) await dbPut(STORE_Q, q);
-    }
-    await putCloudData({ questions: localQ, practiceLogs: localP, updatedAt: Date.now() });
+    const payload = { questions: localQ, practiceLogs: localP, updatedAt: Date.now() };
+    syncLog(`准备上传 ${localQ.length} 道错题到 Bin ${binId}...`);
+    await putCloudData(payload);
     localStorage.setItem('jsonbin_last_sync', Date.now().toString());
     syncLog(`上传完成：${localQ.length} 道错题，${localP.length} 条练习记录`);
     showToast('上传成功');
@@ -1470,16 +1474,17 @@ async function syncSmart() {
   syncBusy = true;
   try {
     syncLog('开始智能同步...');
-    await ensureBinId();
-    const localQ = ensureUUIDs(await dbGetAll(STORE_Q));
+    const binId = await ensureBinId();
+    let localQ = ensureUUIDs(await dbGetAll(STORE_Q));
+    for (const q of localQ) await dbPut(STORE_Q, q);
     const localP = await dbGetAll(STORE_P);
-    for (const q of localQ) { const ex = await dbGetBySyncId(q.syncId); if (ex && ex.id !== q.id) await dbPut(STORE_Q, q); }
     syncLog(`本地：${localQ.length} 道错题`);
     const cloud = await getCloudData();
     syncLog(`云端：${(cloud.questions||[]).length} 道错题`);
     const mergedQ = mergeQuestions(localQ, cloud.questions || []);
     const mergedP = mergeLogs(localP, cloud.practiceLogs || []);
     syncLog(`合并后：${mergedQ.length} 道错题，${mergedP.length} 条练习记录`);
+    syncLog(`准备上传到 Bin ${binId}...`);
     await putCloudData({ questions: mergedQ, practiceLogs: mergedP, updatedAt: Date.now() });
     syncLog('云端已更新，开始同步到本地...');
     const allLocal = await dbGetAll(STORE_Q);
