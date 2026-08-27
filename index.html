@@ -1338,20 +1338,37 @@ function ensureUUIDs(questions) {
   return questions;
 }
 
+function questionContentKey(q) {
+  return (q.content || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
 function mergeQuestions(local, cloud) {
-  const map = {};
-  local.forEach(q => { if (q.syncId) map[q.syncId] = { ...q }; });
+  const bySyncId = {};
+  local.forEach(q => { if (q.syncId) bySyncId[q.syncId] = { ...q }; });
   cloud.forEach(q => {
     if (!q.syncId) return;
-    if (!map[q.syncId]) {
-      map[q.syncId] = { ...q };
+    if (!bySyncId[q.syncId]) {
+      bySyncId[q.syncId] = { ...q };
     } else {
-      const lp = map[q.syncId].lastPracticeTime || 0;
+      const lp = bySyncId[q.syncId].lastPracticeTime || 0;
       const cp = q.lastPracticeTime || 0;
-      if (cp > lp) map[q.syncId] = { ...q };
+      if (cp > lp) bySyncId[q.syncId] = { ...q };
     }
   });
-  return Object.values(map);
+  let merged = Object.values(bySyncId);
+  const byContent = {};
+  merged.forEach(q => {
+    const key = questionContentKey(q);
+    if (!key) { byContent[genUUID()] = q; return; }
+    if (!byContent[key]) {
+      byContent[key] = q;
+    } else {
+      const ep = byContent[key].lastPracticeTime || 0;
+      const cp = q.lastPracticeTime || 0;
+      if (cp > ep) byContent[key] = q;
+    }
+  });
+  return Object.values(byContent);
 }
 
 function mergeLogs(local, cloud) {
