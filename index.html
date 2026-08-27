@@ -575,6 +575,37 @@ body {
       <div class="subtitle">多设备数据同步，基于 JSONBin 免费云存储</div>
     </div>
     <div class="sync-card">
+      <h3>同步操作</h3>
+      <div class="sync-actions">
+        <button class="btn btn-primary" onclick="syncSmart()">智能同步（推荐）</button>
+        <button class="btn btn-secondary" onclick="syncPush()">上传到云端</button>
+        <button class="btn btn-secondary" onclick="syncPull()">从云端恢复</button>
+      </div>
+      <div style="font-size:13px;color:var(--text-secondary);margin-top:12px">
+        <strong>智能同步</strong>：合并本地和云端数据，去重后双向同步<br>
+        <strong>上传</strong>：将本地数据覆盖到云端<br>
+        <strong>恢复</strong>：用云端数据覆盖本地（会清空当前本地数据）
+      </div>
+      <div class="sync-log" id="syncLog"></div>
+    </div>
+    <div class="sync-card">
+      <h3>数据状态</h3>
+      <div class="sync-status">
+        <div class="sync-status-item">
+          <div class="sync-status-value" id="syncLocalCount">—</div>
+          <div class="sync-status-label">本地错题</div>
+        </div>
+        <div class="sync-status-item">
+          <div class="sync-status-value" id="syncCloudCount">—</div>
+          <div class="sync-status-label">云端错题</div>
+        </div>
+        <div class="sync-status-item">
+          <div class="sync-status-value" id="syncLastTime">—</div>
+          <div class="sync-status-label">上次同步</div>
+        </div>
+      </div>
+    </div>
+    <div class="sync-card">
       <h3>配置</h3>
       <div class="form-group">
         <label class="form-label">JSONBin Master Key</label>
@@ -597,37 +628,6 @@ body {
       <div class="form-actions">
         <button class="btn btn-primary" onclick="saveSyncConfig()">保存配置</button>
       </div>
-    </div>
-    <div class="sync-card">
-      <h3>数据状态</h3>
-      <div class="sync-status">
-        <div class="sync-status-item">
-          <div class="sync-status-value" id="syncLocalCount">—</div>
-          <div class="sync-status-label">本地错题</div>
-        </div>
-        <div class="sync-status-item">
-          <div class="sync-status-value" id="syncCloudCount">—</div>
-          <div class="sync-status-label">云端错题</div>
-        </div>
-        <div class="sync-status-item">
-          <div class="sync-status-value" id="syncLastTime">—</div>
-          <div class="sync-status-label">上次同步</div>
-        </div>
-      </div>
-    </div>
-    <div class="sync-card">
-      <h3>同步操作</h3>
-      <div class="sync-actions">
-        <button class="btn btn-primary" onclick="syncSmart()">智能同步（推荐）</button>
-        <button class="btn btn-secondary" onclick="syncPush()">上传到云端</button>
-        <button class="btn btn-secondary" onclick="syncPull()">从云端恢复</button>
-      </div>
-      <div style="font-size:13px;color:var(--text-secondary);margin-top:12px">
-        <strong>智能同步</strong>：合并本地和云端数据，去重后双向同步<br>
-        <strong>上传</strong>：将本地数据覆盖到云端<br>
-        <strong>恢复</strong>：用云端数据覆盖本地（会清空当前本地数据）
-      </div>
-      <div class="sync-log" id="syncLog"></div>
     </div>
   </div>
 </div>
