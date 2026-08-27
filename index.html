@@ -390,6 +390,20 @@ body {
 .question-card-header-actions {
   display: flex; gap: 4px; align-items: center;
 }
+.usage-bar-row {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
+}
+.usage-bar-label {
+  font-size: 13px; color: var(--text); width: 70px; text-align: right; flex-shrink: 0;
+}
+.usage-bar-track {
+  flex: 1; height: 8px; background: var(--primary-lighter);
+  border-radius: 4px; overflow: hidden;
+}
+.usage-bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+.usage-bar-num {
+  font-size: 12px; color: var(--text-secondary); width: 90px; flex-shrink: 0;
+}
 </style>
 </head>
 <body>
@@ -603,6 +617,19 @@ body {
           <div class="sync-status-value" id="syncLastTime">—</div>
           <div class="sync-status-label">上次同步</div>
         </div>
+      </div>
+    </div>
+    <div class="sync-card">
+      <h3>同步额度</h3>
+      <div class="usage-bar-row">
+        <span class="usage-bar-label">本月请求</span>
+        <div class="usage-bar-track"><div class="usage-bar-fill" id="usageApiBar" style="width:0%;background:#D4A5A5"></div></div>
+        <span class="usage-bar-num" id="usageApiNum">— / 10,000</span>
+      </div>
+      <div class="usage-bar-row">
+        <span class="usage-bar-label">存储用量</span>
+        <div class="usage-bar-track"><div class="usage-bar-fill" id="usageStorageBar" style="width:0%;background:#8BAC8B"></div></div>
+        <span class="usage-bar-num" id="usageStorageNum">— / 100 KB</span>
       </div>
     </div>
     <div class="sync-card">
@@ -1487,6 +1514,9 @@ async function jsonbinRequest(method, path, body, useLookupKey) {
   };
   const opts = { method, headers };
   if (body) opts.body = JSON.stringify(body);
+  const monthKey = new Date().toISOString().slice(0,7);
+  const current = Number(localStorage.getItem('jsonbin_req_' + monthKey) || 0);
+  localStorage.setItem('jsonbin_req_' + monthKey, String(current + 1));
   const res = await fetch(`${JSONBIN_BASE}${path}`, opts);
   if (!res.ok) {
     const err = await res.text();
@@ -1572,7 +1602,39 @@ async function initSyncPage() {
     } catch(e) {
       document.getElementById('syncCloudCount').textContent = '—';
     }
+    fetchUsage();
+  } else {
+    document.getElementById('usageApiBar').style.width = '0%';
+    document.getElementById('usageApiNum').textContent = '— / 10,000';
+    document.getElementById('usageStorageBar').style.width = '0%';
+    document.getElementById('usageStorageNum').textContent = '— / 100 KB';
   }
+}
+
+async function fetchUsage() {
+  const config = getSyncConfig();
+  if (!config.apiKey) return;
+  try {
+    const res = await fetch(`${JSONBIN_BASE}/b/${config.binId}/latest`, {
+      headers: { 'X-Master-Key': config.apiKey }
+    });
+    const data = await res.json();
+    const record = data.record || {};
+    const sizeBytes = new Blob([JSON.stringify(record)]).size;
+    const sizeKB = Math.round(sizeBytes * 10 / 1024) / 10;
+    const storageMax = 100;
+    const storagePct = Math.min(100, sizeKB / storageMax * 100);
+    document.getElementById('usageStorageBar').style.width = storagePct + '%';
+    document.getElementById('usageStorageNum').textContent = sizeKB + ' / ' + storageMax + ' KB';
+  } catch(e) {}
+  try {
+    const monthKey = new Date().toISOString().slice(0,7);
+    const reqCount = Number(localStorage.getItem('jsonbin_req_' + monthKey) || 0);
+    const apiMax = 10000;
+    const apiPct = Math.min(100, reqCount / apiMax * 100);
+    document.getElementById('usageApiBar').style.width = apiPct + '%';
+    document.getElementById('usageApiNum').textContent = reqCount.toLocaleString() + ' / ' + apiMax.toLocaleString();
+  } catch(e) {}
 }
 
 function saveSyncConfig() {
