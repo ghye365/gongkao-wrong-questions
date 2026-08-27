@@ -313,9 +313,10 @@ body {
   /* 报告页：三栏并排 */
   .report-charts-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; }
   .report-charts-grid .chart-card { margin-bottom: 0; }
-  /* 同步页：三栏并排 */
-  .sync-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; align-items: start; }
+  /* 同步页：两栏并排 */
+  .sync-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
   .sync-grid .sync-card { margin-bottom: 0; }
+  .sync-log { max-height: 180px; }
   /* 图表高度增大 */
   .chart-box { height: 160px; }
   /* 统计卡片放大 */
@@ -349,10 +350,27 @@ body {
 /* ===== Sync Page ===== */
 .sync-card {
   background: var(--card-bg);
-  border-radius: var(--radius-sm);
-  padding: 12px;
+  border-radius: var(--radius);
+  padding: 16px;
   box-shadow: var(--shadow);
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+}
+.sync-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary-dark);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sync-card-title::before {
+  content: '';
+  width: 3px;
+  height: 14px;
+  background: var(--primary);
+  border-radius: 2px;
 }
 .config-card {
   background: var(--card-bg);
@@ -384,55 +402,134 @@ body {
   font-size: 11px;
   font-family: monospace;
 }
-.sync-card h3 {
-  font-size: 12px;
-  margin-bottom: 8px;
-  color: var(--primary-dark);
+
+/* ===== 同步操作卡片 ===== */
+.op-btn-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.op-btn {
+  padding: 12px 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
   font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
 }
-.sync-status {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 0;
+.op-btn-primary {
+  background: var(--primary);
+  color: #fff;
 }
-.sync-status-item {
+.op-btn-primary:hover { background: var(--primary-dark); }
+.op-btn-secondary {
+  background: var(--primary-lighter);
+  color: var(--primary-dark);
+}
+.op-btn-secondary:hover { background: var(--primary-light); }
+.op-log-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.sync-log {
   background: var(--primary-lighter);
   border-radius: var(--radius-sm);
-  padding: 8px 4px;
-  text-align: center;
-  flex: 1;
-  min-width: 80px;
+  padding: 10px 12px;
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--text-secondary);
+  max-height: 100px;
+  overflow-y: auto;
 }
-.sync-status-value {
-  font-size: 15px;
+.sync-log-entry {
+  padding: 1px 0;
+  display: flex;
+  gap: 8px;
+}
+.sync-log-time {
+  color: var(--primary-dark);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+/* ===== 数据状态卡片 ===== */
+.status-overview {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.ov-item {
+  background: var(--primary-lighter);
+  border-radius: var(--radius-sm);
+  padding: 10px 6px;
+  text-align: center;
+}
+.ov-num {
+  font-size: 20px;
   font-weight: 700;
   color: var(--primary-dark);
 }
-.sync-status-label {
+.ov-num-sm {
+  font-size: 13px;
+  padding-top: 4px;
+}
+.ov-label {
   font-size: 10px;
   color: var(--text-secondary);
-  margin-top: 1px;
+  margin-top: 2px;
 }
-.sync-actions {
+.module-detail {
+  margin-top: 4px;
+}
+.md-title {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.md-list {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 6px;
-  margin-top: 0;
 }
-.sync-actions .btn { flex: 1; padding: 8px 4px; font-size: 12px; }
-.sync-log {
-  margin-top: 8px;
-  max-height: 40px;
-  overflow-y: auto;
+.md-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
   background: var(--primary-lighter);
   border-radius: var(--radius-sm);
-  padding: 6px 10px;
-  font-size: 10px;
-  line-height: 1.5;
-  color: var(--text-secondary);
 }
-.sync-log-entry { padding: 1px 0; }
+.md-name {
+  font-size: 12px;
+  color: var(--text);
+  width: 80px;
+  flex-shrink: 0;
+}
+.md-bar {
+  flex: 1;
+  height: 6px;
+  background: #fff;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.md-bar-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+.md-count {
+  font-size: 12px;
+  color: var(--primary-dark);
+  font-weight: 600;
+  width: 28px;
+  text-align: right;
+  flex-shrink: 0;
+}
 .sync-link {
   color: var(--primary-dark);
   text-decoration: underline;
@@ -653,43 +750,39 @@ body {
 <div id="page-sync" class="page">
   <div class="container">
     <div class="sync-grid">
-      <div class="sync-card">
-        <h3>同步操作</h3>
-        <div class="sync-actions">
-          <button class="btn btn-primary" onclick="syncSmart()">智能同步</button>
-          <button class="btn btn-secondary" onclick="syncPush()">上传</button>
-          <button class="btn btn-secondary" onclick="syncPull()">恢复</button>
+      <!-- 同步操作 -->
+      <div class="sync-card op-card">
+        <div class="sync-card-title">同步操作</div>
+        <div class="op-btn-row">
+          <button class="op-btn op-btn-primary" onclick="syncSmart()">智能同步</button>
+          <button class="op-btn op-btn-secondary" onclick="syncPush()">上传</button>
+          <button class="op-btn op-btn-secondary" onclick="syncPull()">恢复</button>
         </div>
+        <div class="op-log-label">同步日志</div>
         <div class="sync-log" id="syncLog"></div>
       </div>
-      <div class="sync-card">
-        <h3>数据状态</h3>
-        <div class="sync-status">
-          <div class="sync-status-item">
-            <div class="sync-status-value" id="syncLocalCount">—</div>
-            <div class="sync-status-label">本地错题</div>
+      <!-- 数据状态 -->
+      <div class="sync-card status-card">
+        <div class="sync-card-title">数据状态</div>
+        <div class="status-overview">
+          <div class="ov-item">
+            <div class="ov-num" id="syncLocalCount">—</div>
+            <div class="ov-label">本地错题</div>
           </div>
-          <div class="sync-status-item">
-            <div class="sync-status-value" id="syncCloudCount">—</div>
-            <div class="sync-status-label">云端错题</div>
+          <div class="ov-item">
+            <div class="ov-num" id="syncCloudCount">—</div>
+            <div class="ov-label">云端错题</div>
           </div>
-          <div class="sync-status-item">
-            <div class="sync-status-value" id="syncLastTime">—</div>
-            <div class="sync-status-label">上次同步</div>
+          <div class="ov-item">
+            <div class="ov-num ov-num-sm" id="syncLastTime">—</div>
+            <div class="ov-label">上次同步</div>
           </div>
         </div>
-      </div>
-      <div class="sync-card">
-        <h3>同步额度</h3>
-        <div class="usage-bar-row">
-          <span class="usage-bar-label">请求</span>
-          <div class="usage-bar-track"><div class="usage-bar-fill" id="usageApiBar" style="width:0%;background:#D4A5A5"></div></div>
-          <span class="usage-bar-num" id="usageApiNum">— / 10,000</span>
-        </div>
-        <div class="usage-bar-row">
-          <span class="usage-bar-label">存储</span>
-          <div class="usage-bar-track"><div class="usage-bar-fill" id="usageStorageBar" style="width:0%;background:#8BAC8B"></div></div>
-          <span class="usage-bar-num" id="usageStorageNum">— / 100 KB</span>
+        <div class="module-detail">
+          <div class="md-title">各模块题量</div>
+          <div class="md-list" id="moduleBreakdown">
+            <!-- JS 动态渲染 -->
+          </div>
         </div>
       </div>
     </div>
@@ -1594,10 +1687,11 @@ function genUUID() {
 
 function syncLog(msg) {
   const log = document.getElementById('syncLog');
+  if (!log) return;
   const time = new Date().toLocaleTimeString('zh-CN');
   const entry = document.createElement('div');
   entry.className = 'sync-log-entry';
-  entry.textContent = `[${time}] ${msg}`;
+  entry.innerHTML = `<span class="sync-log-time">${time}</span><span>${msg}</span>`;
   log.appendChild(entry);
   log.scrollTop = log.scrollHeight;
 }
@@ -1909,29 +2003,48 @@ async function initSyncPage() {
   const lastTimeEl = document.getElementById('syncLastTime');
   if (lastTimeEl) {
     lastTimeEl.textContent = config.lastSync
-      ? new Date(Number(config.lastSync)).toLocaleString('zh-CN')
+      ? new Date(Number(config.lastSync)).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
       : '—';
   }
   const localQ = await dbGetAll(STORE_Q);
-  document.getElementById('syncLocalCount').textContent = localQ.length;
+  const localCountEl = document.getElementById('syncLocalCount');
+  if (localCountEl) localCountEl.textContent = localQ.length;
+  // 渲染本地各模块明细
+  renderModuleBreakdown(localQ);
+  // 获取云端数量
+  const cloudCountEl = document.getElementById('syncCloudCount');
   if (config.apiKey && config.collectionId) {
     try {
       const cloud = await getCloudData();
-      document.getElementById('syncCloudCount').textContent = (cloud.questions || []).length;
+      if (cloudCountEl) cloudCountEl.textContent = (cloud.questions || []).length;
     } catch(e) {
-      document.getElementById('syncCloudCount').textContent = '—';
+      if (cloudCountEl) cloudCountEl.textContent = '—';
     }
-    fetchUsage();
   } else {
-    const apiBar = document.getElementById('usageApiBar');
-    const apiNum = document.getElementById('usageApiNum');
-    const stoBar = document.getElementById('usageStorageBar');
-    const stoNum = document.getElementById('usageStorageNum');
-    if (apiBar) apiBar.style.width = '0%';
-    if (apiNum) apiNum.textContent = '— / 10,000';
-    if (stoBar) stoBar.style.width = '0%';
-    if (stoNum) stoNum.textContent = '— / 600 KB';
+    if (cloudCountEl) cloudCountEl.textContent = '—';
   }
+}
+
+function renderModuleBreakdown(questions) {
+  const listEl = document.getElementById('moduleBreakdown');
+  if (!listEl) return;
+  const counts = {};
+  MODULE_NAMES.forEach(n => counts[n] = 0);
+  questions.forEach(q => {
+    const l1 = q.category?.level1 || '';
+    if (counts[l1] !== undefined) counts[l1]++;
+    else counts[MODULE_NAMES[0]]++; // 无分类的算在常识里
+  });
+  const max = Math.max(...Object.values(counts), 1);
+  listEl.innerHTML = MODULE_NAMES.map(name => {
+    const c = counts[name];
+    const pct = Math.round(c / max * 100);
+    return `<div class="md-row">
+      <span class="md-name">${name}</span>
+      <div class="md-bar"><div class="md-bar-fill" style="width:${pct}%"></div></div>
+      <span class="md-count">${c}</span>
+    </div>`;
+  }).join('');
 }
 
 async function fetchUsage() {
