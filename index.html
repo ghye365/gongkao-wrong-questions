@@ -361,6 +361,29 @@ body {
   box-shadow: var(--shadow);
   border: 1px solid var(--border);
 }
+.cfg-bin-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+}
+.cfg-bin-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: var(--primary-lighter);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+.cfg-bin-name {
+  color: var(--text);
+  font-weight: 500;
+}
+.cfg-bin-id {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-family: monospace;
+}
 .sync-card h3 {
   font-size: 12px;
   margin-bottom: 8px;
@@ -696,8 +719,19 @@ body {
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Bin ID（自动生成）</label>
-        <input type="text" class="form-input" id="syncBinId" placeholder="保存配置后自动获取" readonly>
+        <label class="form-label">Collection ID（自动生成）</label>
+        <input type="text" class="form-input" id="syncCollectionId" placeholder="首次同步后自动获取" readonly>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Bin 列表（6个）</label>
+        <div class="cfg-bin-list" id="syncBinList">
+          <div class="cfg-bin-item"><span class="cfg-bin-name">常识判断</span><span class="cfg-bin-id">未创建</span></div>
+          <div class="cfg-bin-item"><span class="cfg-bin-name">言语理解与表达</span><span class="cfg-bin-id">未创建</span></div>
+          <div class="cfg-bin-item"><span class="cfg-bin-name">数量关系</span><span class="cfg-bin-id">未创建</span></div>
+          <div class="cfg-bin-item"><span class="cfg-bin-name">判断推理</span><span class="cfg-bin-id">未创建</span></div>
+          <div class="cfg-bin-item"><span class="cfg-bin-name">资料分析</span><span class="cfg-bin-id">未创建</span></div>
+          <div class="cfg-bin-item"><span class="cfg-bin-name">练习记录</span><span class="cfg-bin-id">未创建</span></div>
+        </div>
       </div>
       <div class="form-actions">
         <button class="btn btn-primary" onclick="saveSyncConfig()">保存配置</button>
@@ -1275,7 +1309,7 @@ async function autoSyncIfEnabled() {
   const config = getSyncConfig();
   if (!config.apiKey || !config.syncCode) return;
   try {
-    const binId = await ensureBinId();
+    await ensureCollectionAndBins();
     let localQ = ensureUUIDs(await dbGetAll(STORE_Q));
     for (const q of localQ) await dbPut(STORE_Q, q);
     const localP = await dbGetAll(STORE_P);
@@ -1528,15 +1562,30 @@ async function renderReport() {
 // ==================== 云同步（JSONBin） ====================
 const JSONBIN_BASE = 'https://api.jsonbin.io/v3';
 const SYNC_LOOKUP_BIN = '6a8f92abf5f4af5e29476ee7';
+const MODULE_NAMES = ['常识判断', '言语理解与表达', '数量关系', '判断推理', '资料分析'];
+const LOG_BIN_NAME = '练习记录';
 let syncBusy = false;
 
 function getSyncConfig() {
+  let binIds = {};
+  try { binIds = JSON.parse(localStorage.getItem('jsonbin_bin_ids') || '{}'); } catch(e) {}
   return {
     apiKey: localStorage.getItem('jsonbin_api_key') || '',
     syncCode: localStorage.getItem('jsonbin_sync_code') || '',
-    binId: localStorage.getItem('jsonbin_bin_id') || '',
-    lastSync: localStorage.getItem('jsonbin_last_sync') || ''
+    collectionId: localStorage.getItem('jsonbin_collection_id') || '',
+    binIds: binIds,
+    lastSync: localStorage.getItem('jsonbin_last_sync') || '',
+    migrated: localStorage.getItem('jsonbin_migrated') === '1'
   };
+}
+
+function saveBinIds(binIds) {
+  localStorage.setItem('jsonbin_bin_ids', JSON.stringify(binIds));
+}
+
+function getBinId(name) {
+  const config = getSyncConfig();
+  return config.binIds[name] || '';
 }
 
 function genUUID() {
@@ -1553,7 +1602,7 @@ function syncLog(msg) {
   log.scrollTop = log.scrollHeight;
 }
 
-async function jsonbinRequest(method, path, body, useLookupKey) {
+async function jsonbinRequest(method, path, body) {
   const config = getSyncConfig();
   if (!config.apiKey) throw new Error('未配置 API Key');
   const headers = {
@@ -1573,83 +1622,299 @@ async function jsonbinRequest(method, path, body, useLookupKey) {
   return res.json();
 }
 
-async function ensureBinId() {
+// 获取 Collection 信息（包含所有 Bin）
+async function getCollection(collectionId) {
+  return await jsonbinRequest('GET', `/c/${collectionId}/bins`);
+}
+
+// 创建 Collection
+async function createCollection(name) {
+  return await jsonbinRequest('POST', '/c', { name });
+}
+
+// 在 Collection 中创建 Bin
+async function createBinInCollection(collectionId, name, data) {
+  return await jsonbinRequest('POST', `/b/${collectionId}`, data, {
+    'X-Collection-Id': collectionId
+  });
+  // 注意：JSONBin v3 创建带 Collection 的 Bin 需要在 header 中传 X-Collection-Id
+  // 让我们用标准方式：POST /b 并在 body 中传 collectionId
+}
+
+// 修正：用标准方式创建 Bin 并关联 Collection
+async function createBinWithCollection(collectionId, name, data) {
+  const res = await fetch(`${JSONBIN_BASE}/b`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Master-Key': getSyncConfig().apiKey,
+      'X-Collection-Id': collectionId,
+      'X-Bin-Name': name
+    },
+    body: JSON.stringify(data)
+  });
+  // 计数
+  const monthKey = new Date().toISOString().slice(0,7);
+  const current = Number(localStorage.getItem('jsonbin_req_' + monthKey) || 0);
+  localStorage.setItem('jsonbin_req_' + monthKey, String(current + 1));
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`JSONBin ${res.status}: ${err}`);
+  }
+  return res.json();
+}
+
+// 读取单个 Bin
+async function readBin(binId) {
+  const result = await jsonbinRequest('GET', `/b/${binId}/latest`);
+  return result.record || {};
+}
+
+// 写入单个 Bin
+async function writeBin(binId, data) {
+  await jsonbinRequest('PUT', `/b/${binId}`, data);
+}
+
+// 确保 Collection 和 6 个 Bin 都存在
+async function ensureCollectionAndBins() {
   const config = getSyncConfig();
   if (!config.syncCode) throw new Error('请先填写同步码');
-  syncLog('正在查找云端仓库（同步码: ' + config.syncCode + '）...');
+  syncLog('正在查找云端集合（同步码: ' + config.syncCode + '）...');
+
+  // 1. 从 lookup 中找 collectionId
+  let collectionId = '';
   try {
     const lookup = await jsonbinRequest('GET', `/b/${SYNC_LOOKUP_BIN}/latest`);
     const map = lookup.record || {};
-    const binId = map[config.syncCode];
-    if (binId) {
-      syncLog(`找到已有云端仓库，Bin ID: ${binId}`);
-      if (config.binId !== binId) {
-        localStorage.setItem('jsonbin_bin_id', binId);
-        document.getElementById('syncBinId').value = binId;
-      }
-      return binId;
+    if (map[config.syncCode]) {
+      collectionId = map[config.syncCode];
+      syncLog('找到已有集合: ' + collectionId);
     }
   } catch(e) {
-    syncLog('查找仓库失败: ' + e.message + '，将创建新仓库...');
+    syncLog('查找集合失败: ' + e.message + '，将创建新集合...');
   }
-  if (config.binId) {
-    syncLog('使用本地已保存的 Bin ID: ' + config.binId);
-    return config.binId;
+
+  // 2. 如果有 collectionId，读取所有 Bin
+  let binIds = {};
+  if (collectionId) {
+    try {
+      // 尝试从 collection 读取 bin 列表
+      const binsData = await jsonbinRequest('GET', `/c/${collectionId}/bins`);
+      const bins = binsData.records || binsData || [];
+      bins.forEach(b => {
+        const name = b.name || b.snippet?.name || '';
+        if (b.id) binIds[name] = b.id;
+      });
+      syncLog(`集合中共 ${Object.keys(binIds).length} 个 Bin`);
+    } catch(e) {
+      syncLog('读取 Bin 列表失败: ' + e.message);
+    }
   }
-  syncLog('未找到对应仓库，正在创建...');
-  const result = await jsonbinRequest('POST', '/b', {
-    questions: [],
-    practiceLogs: [],
-    createdAt: Date.now()
-  });
-  const binId = result.metadata.id;
-  let lookupMap = {};
-  try {
-    const lookup = await jsonbinRequest('GET', `/b/${SYNC_LOOKUP_BIN}/latest`);
-    lookupMap = lookup.record || {};
-  } catch(e) {}
-  lookupMap[config.syncCode] = binId;
-  try { await jsonbinRequest('PUT', `/b/${SYNC_LOOKUP_BIN}`, lookupMap); } catch(e) {}
-  localStorage.setItem('jsonbin_bin_id', binId);
-  document.getElementById('syncBinId').value = binId;
-  syncLog(`云端仓库已创建，Bin ID: ${binId}`);
-  return binId;
+
+  // 3. 如果没有 collectionId，创建 Collection + 6 个 Bin
+  if (!collectionId) {
+    syncLog('正在创建集合...');
+    const colResult = await createCollection(`gongkao-${config.syncCode}`);
+    collectionId = colResult.metadata?.id || colResult.id || '';
+    if (!collectionId) throw new Error('创建集合失败');
+    syncLog('集合已创建: ' + collectionId);
+
+    // 创建 5 个模块 Bin + 1 个练习记录 Bin
+    const allNames = [...MODULE_NAMES, LOG_BIN_NAME];
+    for (const name of allNames) {
+      const initialData = name === LOG_BIN_NAME ? { practiceLogs: [], stats: {} } : { questions: [] };
+      const result = await createBinWithCollection(collectionId, name, initialData);
+      const bid = result.metadata?.id || result.id || '';
+      if (bid) {
+        binIds[name] = bid;
+        syncLog(`  Bin [${name}] 创建成功`);
+      }
+    }
+
+    // 保存到 lookup
+    let lookupMap = {};
+    try {
+      const lookup = await jsonbinRequest('GET', `/b/${SYNC_LOOKUP_BIN}/latest`);
+      lookupMap = lookup.record || {};
+    } catch(e) {}
+    lookupMap[config.syncCode] = collectionId;
+    try { await jsonbinRequest('PUT', `/b/${SYNC_LOOKUP_BIN}`, lookupMap); } catch(e) {}
+  }
+
+  // 4. 检查缺失的 Bin，补齐
+  const allNames = [...MODULE_NAMES, LOG_BIN_NAME];
+  const missing = allNames.filter(n => !binIds[n]);
+  if (missing.length > 0) {
+    syncLog(`补齐 ${missing.length} 个缺失的 Bin...`);
+    for (const name of missing) {
+      const initialData = name === LOG_BIN_NAME ? { practiceLogs: [], stats: {} } : { questions: [] };
+      try {
+        const result = await createBinWithCollection(collectionId, name, initialData);
+        const bid = result.metadata?.id || result.id || '';
+        if (bid) binIds[name] = bid;
+        syncLog(`  Bin [${name}] 已创建`);
+      } catch(e) {
+        syncLog(`  Bin [${name}] 创建失败: ` + e.message);
+      }
+    }
+  }
+
+  // 5. 保存到本地
+  localStorage.setItem('jsonbin_collection_id', collectionId);
+  saveBinIds(binIds);
+
+  return { collectionId, binIds };
 }
 
+// 从云端读取全部数据（6个Bin合并）
 async function getCloudData() {
   const config = getSyncConfig();
-  if (!config.binId) return { questions: [], practiceLogs: [] };
-  const result = await jsonbinRequest('GET', `/b/${config.binId}/latest`);
-  const record = result.record || {};
-  return {
-    questions: record.questions || [],
-    practiceLogs: record.practiceLogs || []
-  };
+  const allQuestions = [];
+  let allLogs = [];
+
+  // 读取 5 个模块 Bin
+  for (const name of MODULE_NAMES) {
+    const bid = config.binIds[name];
+    if (!bid) continue;
+    try {
+      const data = await readBin(bid);
+      if (data.questions && Array.isArray(data.questions)) {
+        allQuestions.push(...data.questions);
+      }
+    } catch(e) {
+      syncLog(`读取 [${name}] 失败: ` + e.message);
+    }
+  }
+
+  // 读取练习记录 Bin
+  const logBid = config.binIds[LOG_BIN_NAME];
+  if (logBid) {
+    try {
+      const data = await readBin(logBid);
+      allLogs = data.practiceLogs || [];
+    } catch(e) {
+      syncLog('读取练习记录失败: ' + e.message);
+    }
+  }
+
+  return { questions: allQuestions, practiceLogs: allLogs };
 }
 
-async function putCloudData(data) {
+// 全量写入云端（按模块拆分到各 Bin）
+async function putCloudData(fullData) {
   const config = getSyncConfig();
-  if (!config.binId) throw new Error('Bin ID 不存在');
-  await jsonbinRequest('PUT', `/b/${config.binId}`, data);
+  const questions = fullData.questions || [];
+  const practiceLogs = fullData.practiceLogs || [];
+
+  // 按一级模块分组
+  const byModule = {};
+  MODULE_NAMES.forEach(n => byModule[n] = []);
+  questions.forEach(q => {
+    const l1 = q.category?.level1 || '';
+    if (byModule[l1]) {
+      byModule[l1].push(q);
+    } else {
+      // 无分类的题放到第一个模块里兜底
+      byModule[MODULE_NAMES[0]].push(q);
+    }
+  });
+
+  // 写入 5 个模块 Bin
+  for (const name of MODULE_NAMES) {
+    const bid = config.binIds[name];
+    if (!bid) continue;
+    try {
+      await writeBin(bid, { questions: byModule[name] || [], updatedAt: Date.now() });
+    } catch(e) {
+      syncLog(`写入 [${name}] 失败: ` + e.message);
+    }
+  }
+
+  // 写入练习记录 Bin
+  const logBid = config.binIds[LOG_BIN_NAME];
+  if (logBid) {
+    try {
+      await writeBin(logBid, { practiceLogs: practiceLogs, stats: fullData.stats || {}, updatedAt: Date.now() });
+    } catch(e) {
+      syncLog('写入练习记录失败: ' + e.message);
+    }
+  }
+}
+
+// 单模块增量写入（只更新某个模块的 Bin，更省请求）
+async function putModuleBin(level1, moduleQuestions) {
+  const bid = getBinId(level1);
+  if (!bid) return;
+  await writeBin(bid, { questions: moduleQuestions, updatedAt: Date.now() });
+}
+
+// 迁移旧 Bin 数据到新的多 Bin 结构
+async function migrateFromOldBin() {
+  const config = getSyncConfig();
+  if (config.migrated) return;
+  const oldBinId = localStorage.getItem('jsonbin_bin_id') || '';
+  if (!oldBinId) {
+    localStorage.setItem('jsonbin_migrated', '1');
+    return;
+  }
+
+  syncLog('检测到旧版数据，正在迁移...');
+  try {
+    const oldData = await readBin(oldBinId);
+    const questions = oldData.questions || [];
+    const practiceLogs = oldData.practiceLogs || [];
+    syncLog(`旧数据共 ${questions.length} 道错题，${practiceLogs.length} 条记录`);
+
+    if (questions.length > 0 || practiceLogs.length > 0) {
+      // 确保集合和 Bin 存在
+      await ensureCollectionAndBins();
+      // 写入新结构
+      await putCloudData({ questions, practiceLogs });
+      syncLog('迁移完成！旧数据已拆分到各模块 Bin');
+    } else {
+      syncLog('旧 Bin 无数据，跳过迁移');
+    }
+    localStorage.setItem('jsonbin_migrated', '1');
+  } catch(e) {
+    syncLog('迁移失败: ' + e.message);
+  }
 }
 
 function loadConfigToForm() {
   const config = getSyncConfig();
   document.getElementById('syncApiKey').value = config.apiKey || '';
   document.getElementById('syncCode').value = config.syncCode || '';
-  document.getElementById('syncBinId').value = config.binId || '';
+  document.getElementById('syncCollectionId').value = config.collectionId || '';
+  // 渲染 bin 状态
+  const binListEl = document.getElementById('syncBinList');
+  if (binListEl) {
+    const allNames = [...MODULE_NAMES, LOG_BIN_NAME];
+    binListEl.innerHTML = allNames.map(name => {
+      const bid = config.binIds[name] || '';
+      return `<div class="cfg-bin-item">
+        <span class="cfg-bin-name">${name}</span>
+        <span class="cfg-bin-id">${bid ? bid.slice(0,8)+'...' : '未创建'}</span>
+      </div>`;
+    }).join('');
+  }
 }
+
 async function initSyncPage() {
   const config = getSyncConfig();
-  document.getElementById('syncApiKey').value = config.apiKey;
-  document.getElementById('syncCode').value = config.syncCode;
-  document.getElementById('syncBinId').value = config.binId;
-  document.getElementById('syncLastTime').textContent = config.lastSync
-    ? new Date(Number(config.lastSync)).toLocaleString('zh-CN')
-    : '—';
+  // 同步页也会用到这些输入框（虽然在配置页，但id是共享的）
+  const apiKeyEl = document.getElementById('syncApiKey');
+  const codeEl = document.getElementById('syncCode');
+  if (apiKeyEl) apiKeyEl.value = config.apiKey;
+  if (codeEl) codeEl.value = config.syncCode;
+  const lastTimeEl = document.getElementById('syncLastTime');
+  if (lastTimeEl) {
+    lastTimeEl.textContent = config.lastSync
+      ? new Date(Number(config.lastSync)).toLocaleString('zh-CN')
+      : '—';
+  }
   const localQ = await dbGetAll(STORE_Q);
   document.getElementById('syncLocalCount').textContent = localQ.length;
-  if (config.apiKey && config.binId) {
+  if (config.apiKey && config.collectionId) {
     try {
       const cloud = await getCloudData();
       document.getElementById('syncCloudCount').textContent = (cloud.questions || []).length;
@@ -1658,10 +1923,14 @@ async function initSyncPage() {
     }
     fetchUsage();
   } else {
-    document.getElementById('usageApiBar').style.width = '0%';
-    document.getElementById('usageApiNum').textContent = '— / 10,000';
-    document.getElementById('usageStorageBar').style.width = '0%';
-    document.getElementById('usageStorageNum').textContent = '— / 100 KB';
+    const apiBar = document.getElementById('usageApiBar');
+    const apiNum = document.getElementById('usageApiNum');
+    const stoBar = document.getElementById('usageStorageBar');
+    const stoNum = document.getElementById('usageStorageNum');
+    if (apiBar) apiBar.style.width = '0%';
+    if (apiNum) apiNum.textContent = '— / 10,000';
+    if (stoBar) stoBar.style.width = '0%';
+    if (stoNum) stoNum.textContent = '— / 600 KB';
   }
 }
 
@@ -1669,25 +1938,33 @@ async function fetchUsage() {
   const config = getSyncConfig();
   if (!config.apiKey) return;
   try {
-    const res = await fetch(`${JSONBIN_BASE}/b/${config.binId}/latest`, {
-      headers: { 'X-Master-Key': config.apiKey }
-    });
-    const data = await res.json();
-    const record = data.record || {};
-    const sizeBytes = new Blob([JSON.stringify(record)]).size;
-    const sizeKB = Math.round(sizeBytes * 10 / 1024) / 10;
-    const storageMax = 100;
+    let totalBytes = 0;
+    const allNames = [...MODULE_NAMES, LOG_BIN_NAME];
+    for (const name of allNames) {
+      const bid = config.binIds[name];
+      if (!bid) continue;
+      try {
+        const data = await readBin(bid);
+        totalBytes += new Blob([JSON.stringify(data)]).size;
+      } catch(e) {}
+    }
+    const sizeKB = Math.round(totalBytes * 10 / 1024) / 10;
+    const storageMax = 600; // 6个Bin × 100KB
     const storagePct = Math.min(100, sizeKB / storageMax * 100);
-    document.getElementById('usageStorageBar').style.width = storagePct + '%';
-    document.getElementById('usageStorageNum').textContent = sizeKB + ' / ' + storageMax + ' KB';
+    const stoBar = document.getElementById('usageStorageBar');
+    const stoNum = document.getElementById('usageStorageNum');
+    if (stoBar) stoBar.style.width = storagePct + '%';
+    if (stoNum) stoNum.textContent = sizeKB + ' / ' + storageMax + ' KB';
   } catch(e) {}
   try {
     const monthKey = new Date().toISOString().slice(0,7);
     const reqCount = Number(localStorage.getItem('jsonbin_req_' + monthKey) || 0);
     const apiMax = 10000;
     const apiPct = Math.min(100, reqCount / apiMax * 100);
-    document.getElementById('usageApiBar').style.width = apiPct + '%';
-    document.getElementById('usageApiNum').textContent = reqCount.toLocaleString() + ' / ' + apiMax.toLocaleString();
+    const apiBar = document.getElementById('usageApiBar');
+    const apiNum = document.getElementById('usageApiNum');
+    if (apiBar) apiBar.style.width = apiPct + '%';
+    if (apiNum) apiNum.textContent = reqCount.toLocaleString() + ' / ' + apiMax.toLocaleString();
   } catch(e) {}
 }
 
@@ -1700,9 +1977,12 @@ function saveSyncConfig() {
   localStorage.setItem('jsonbin_api_key', apiKey);
   localStorage.setItem('jsonbin_sync_code', syncCode);
   if (oldCode && oldCode !== syncCode) {
-    localStorage.removeItem('jsonbin_bin_id');
+    localStorage.removeItem('jsonbin_collection_id');
+    localStorage.removeItem('jsonbin_bin_ids');
+    localStorage.removeItem('jsonbin_migrated');
   }
   showToast('配置已保存');
+  loadConfigToForm();
   initSyncPage();
 }
 
@@ -1756,13 +2036,13 @@ async function syncPush() {
   syncBusy = true;
   try {
     syncLog('开始上传...');
-    const binId = await ensureBinId();
+    await ensureCollectionAndBins();
+    await migrateFromOldBin();
     let localQ = ensureUUIDs(await dbGetAll(STORE_Q));
     for (const q of localQ) await dbPut(STORE_Q, q);
     const localP = await dbGetAll(STORE_P);
-    const payload = { questions: localQ, practiceLogs: localP, updatedAt: Date.now() };
-    syncLog(`准备上传 ${localQ.length} 道错题到 Bin ${binId}...`);
-    await putCloudData(payload);
+    syncLog(`准备上传 ${localQ.length} 道错题到 5 个模块 Bin...`);
+    await putCloudData({ questions: localQ, practiceLogs: localP, updatedAt: Date.now() });
     localStorage.setItem('jsonbin_last_sync', Date.now().toString());
     syncLog(`上传完成：${localQ.length} 道错题，${localP.length} 条练习记录`);
     showToast('上传成功');
@@ -1781,6 +2061,8 @@ async function syncPull() {
   syncBusy = true;
   try {
     syncLog('开始从云端恢复...');
+    await ensureCollectionAndBins();
+    await migrateFromOldBin();
     const cloud = await getCloudData();
     const allLocal = await dbGetAll(STORE_Q);
     for (const q of allLocal) await dbDelete(STORE_Q, q.id);
@@ -1805,7 +2087,8 @@ async function syncSmart() {
   syncBusy = true;
   try {
     syncLog('开始智能同步...');
-    const binId = await ensureBinId();
+    await ensureCollectionAndBins();
+    await migrateFromOldBin();
     let localQ = ensureUUIDs(await dbGetAll(STORE_Q));
     for (const q of localQ) await dbPut(STORE_Q, q);
     const localP = await dbGetAll(STORE_P);
@@ -1815,7 +2098,7 @@ async function syncSmart() {
     const mergedQ = mergeQuestions(localQ, cloud.questions || []);
     const mergedP = mergeLogs(localP, cloud.practiceLogs || []);
     syncLog(`合并后：${mergedQ.length} 道错题，${mergedP.length} 条练习记录`);
-    syncLog(`准备上传到 Bin ${binId}...`);
+    syncLog('准备上传到各模块 Bin...');
     await putCloudData({ questions: mergedQ, practiceLogs: mergedP, updatedAt: Date.now() });
     syncLog('云端已更新，开始同步到本地...');
     const allLocal = await dbGetAll(STORE_Q);
