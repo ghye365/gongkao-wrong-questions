@@ -550,8 +550,15 @@ body {
         </div>
       </div>
       <div class="form-group">
-        <label class="form-label">Bin ID（自动生成，无需手动填写）</label>
-        <input type="text" class="form-input" id="syncBinId" placeholder="首次同步时自动创建" readonly>
+        <label class="form-label">同步码（跨设备共享用）</label>
+        <input type="text" class="form-input" id="syncCode" placeholder="输入一个自定义同步码，如 gongkao2026">
+        <div style="font-size:12px;color:var(--text-secondary);margin-top:6px">
+          所有设备使用<strong>相同的 Master Key + 相同的同步码</strong>，即可共享同一份云端数据
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Bin ID（自动管理）</label>
+        <input type="text" class="form-input" id="syncBinId" placeholder="保存配置后自动获取" readonly>
       </div>
       <div class="form-actions">
         <button class="btn btn-primary" onclick="saveSyncConfig()">保存配置</button>
@@ -1230,11 +1237,13 @@ async function renderReport() {
 
 // ==================== 云同步（JSONBin） ====================
 const JSONBIN_BASE = 'https://api.jsonbin.io/v3';
+const SYNC_LOOKUP_BIN = '6a8f92abf5f4af5e29476ee7';
 let syncBusy = false;
 
 function getSyncConfig() {
   return {
     apiKey: localStorage.getItem('jsonbin_api_key') || '',
+    syncCode: localStorage.getItem('jsonbin_sync_code') || '',
     binId: localStorage.getItem('jsonbin_bin_id') || '',
     lastSync: localStorage.getItem('jsonbin_last_sync') || ''
   };
@@ -1254,7 +1263,7 @@ function syncLog(msg) {
   log.scrollTop = log.scrollHeight;
 }
 
-async function jsonbinRequest(method, path, body) {
+async function jsonbinRequest(method, path, body, useLookupKey) {
   const config = getSyncConfig();
   if (!config.apiKey) throw new Error('未配置 API Key');
   const headers = {
@@ -1274,13 +1283,35 @@ async function jsonbinRequest(method, path, body) {
 async function ensureBinId() {
   const config = getSyncConfig();
   if (config.binId) return config.binId;
-  syncLog('首次使用，正在创建云端数据仓库...');
+  if (!config.syncCode) throw new Error('请先填写同步码');
+  syncLog('正在查找云端仓库（同步码: ' + config.syncCode + '）...');
+  try {
+    const lookup = await jsonbinRequest('GET', `/b/${SYNC_LOOKUP_BIN}/latest`);
+    const map = lookup.record || {};
+    const binId = map[config.syncCode];
+    if (binId) {
+      syncLog(`找到已有云端仓库，Bin ID: ${binId}`);
+      localStorage.setItem('jsonbin_bin_id', binId);
+      document.getElementById('syncBinId').value = binId;
+      return binId;
+    }
+  } catch(e) {
+    syncLog('查找仓库失败，将创建新仓库...');
+  }
+  syncLog('未找到对应仓库，正在创建...');
   const result = await jsonbinRequest('POST', '/b', {
     questions: [],
     practiceLogs: [],
     createdAt: Date.now()
   });
   const binId = result.metadata.id;
+  let lookupMap = {};
+  try {
+    const lookup = await jsonbinRequest('GET', `/b/${SYNC_LOOKUP_BIN}/latest`);
+    lookupMap = lookup.record || {};
+  } catch(e) {}
+  lookupMap[config.syncCode] = binId;
+  try { await jsonbinRequest('PUT', `/b/${SYNC_LOOKUP_BIN}`, lookupMap); } catch(e) {}
   localStorage.setItem('jsonbin_bin_id', binId);
   document.getElementById('syncBinId').value = binId;
   syncLog(`云端仓库已创建，Bin ID: ${binId}`);
@@ -1307,6 +1338,7 @@ async function putCloudData(data) {
 async function initSyncPage() {
   const config = getSyncConfig();
   document.getElementById('syncApiKey').value = config.apiKey;
+  document.getElementById('syncCode').value = config.syncCode;
   document.getElementById('syncBinId').value = config.binId;
   document.getElementById('syncLastTime').textContent = config.lastSync
     ? new Date(Number(config.lastSync)).toLocaleString('zh-CN')
@@ -1325,8 +1357,15 @@ async function initSyncPage() {
 
 function saveSyncConfig() {
   const apiKey = document.getElementById('syncApiKey').value.trim();
+  const syncCode = document.getElementById('syncCode').value.trim();
   if (!apiKey) { showToast('请输入 API Key'); return; }
+  if (!syncCode) { showToast('请输入同步码'); return; }
+  const oldCode = localStorage.getItem('jsonbin_sync_code');
   localStorage.setItem('jsonbin_api_key', apiKey);
+  localStorage.setItem('jsonbin_sync_code', syncCode);
+  if (oldCode && oldCode !== syncCode) {
+    localStorage.removeItem('jsonbin_bin_id');
+  }
   showToast('配置已保存');
   initSyncPage();
 }
