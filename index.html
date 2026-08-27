@@ -354,6 +354,13 @@ body {
   box-shadow: var(--shadow);
   margin-bottom: 8px;
 }
+.config-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
 .sync-card h3 {
   font-size: 12px;
   margin-bottom: 8px;
@@ -469,6 +476,7 @@ body {
     <button class="nav-tab" data-page="page-redo" onclick="showPage('page-redo')">错题重做</button>
     <button class="nav-tab" data-page="page-report" onclick="showPage('page-report')">分析报告</button>
     <button class="nav-tab" data-page="page-sync" onclick="showPage('page-sync')">云同步</button>
+    <button class="nav-tab" data-page="page-config" onclick="showPage('page-config')">配置</button>
   </div>
 </nav>
 
@@ -662,21 +670,38 @@ body {
         </div>
       </div>
     </div>
-    <div class="sync-card">
-      <h3>配置</h3>
-      <div class="form-group" style="margin-bottom:10px">
-        <label class="form-label" style="font-size:12px">Master Key</label>
-        <input type="text" class="form-input" id="syncApiKey" placeholder="粘贴 JSONBin X-Master-Key" style="font-size:13px;padding:8px 10px">
+  </div>
+</div>
+
+<!-- ===== Config Page ===== -->
+<div id="page-config" class="page">
+  <div class="container">
+    <div class="page-header">
+      <h2>云同步配置</h2>
+      <div class="subtitle">配置 JSONBin 云存储参数</div>
+    </div>
+    <div class="config-card">
+      <div class="form-group">
+        <label class="form-label">JSONBin Master Key</label>
+        <input type="text" class="form-input" id="syncApiKey" placeholder="粘贴你的 JSONBin X-Master-Key">
+        <div style="font-size:12px;color:var(--text-secondary);margin-top:6px">
+          还没有 Key？去 <span class="sync-link" onclick="window.open('https://jsonbin.io/api-keys','_blank')">jsonbin.io</span> 免费注册
+        </div>
       </div>
-      <div class="form-group" style="margin-bottom:10px">
-        <label class="form-label" style="font-size:12px">同步码</label>
-        <input type="text" class="form-input" id="syncCode" placeholder="自定义同步码，两设备需一致" style="font-size:13px;padding:8px 10px">
+      <div class="form-group">
+        <label class="form-label">同步码</label>
+        <input type="text" class="form-input" id="syncCode" placeholder="自定义同步码，多设备需一致">
+        <div style="font-size:12px;color:var(--text-secondary);margin-top:6px">
+          所有设备使用<strong>相同的 Master Key + 相同的同步码</strong>，即可共享同一份云端数据
+        </div>
       </div>
-      <div class="form-group" style="margin-bottom:10px">
-        <label class="form-label" style="font-size:12px">Bin ID（自动）</label>
-        <input type="text" class="form-input" id="syncBinId" placeholder="保存后自动获取" readonly style="font-size:13px;padding:8px 10px">
+      <div class="form-group">
+        <label class="form-label">Bin ID（自动生成）</label>
+        <input type="text" class="form-input" id="syncBinId" placeholder="保存配置后自动获取" readonly>
       </div>
-      <button class="btn btn-primary" onclick="saveSyncConfig()" style="width:100%">保存配置</button>
+      <div class="form-actions">
+        <button class="btn btn-primary" onclick="saveSyncConfig()">保存配置</button>
+      </div>
     </div>
   </div>
 </div>
@@ -902,6 +927,7 @@ function showPage(pageId) {
     case 'page-redo': initRedoPage(); break;
     case 'page-report': renderReport(); break;
     case 'page-sync': initSyncPage(); break;
+    case 'page-config': loadConfigToForm(); break;
   }
 }
 
@@ -1607,6 +1633,12 @@ async function putCloudData(data) {
   await jsonbinRequest('PUT', `/b/${config.binId}`, data);
 }
 
+function loadConfigToForm() {
+  const config = getSyncConfig();
+  document.getElementById('syncApiKey').value = config.apiKey || '';
+  document.getElementById('syncCode').value = config.syncCode || '';
+  document.getElementById('syncBinId').value = config.binId || '';
+}
 async function initSyncPage() {
   const config = getSyncConfig();
   document.getElementById('syncApiKey').value = config.apiKey;
