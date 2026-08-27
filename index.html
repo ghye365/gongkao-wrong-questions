@@ -356,6 +356,40 @@ body {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* ===== Edit Modal ===== */
+.modal-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 2000;
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 80px 16px 40px;
+}
+.modal-overlay.show { display: flex; }
+.modal-box {
+  background: #fff;
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 640px;
+  padding: 24px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+}
+.modal-title {
+  font-size: 18px; font-weight: 700; color: var(--primary-dark);
+  margin-bottom: 20px;
+}
+.edit-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 12px; color: var(--primary-dark);
+  padding: 2px 8px; border-radius: 4px;
+}
+.edit-btn:hover { background: var(--primary-lighter); }
+.question-card-header-actions {
+  display: flex; gap: 4px; align-items: center;
+}
 </style>
 </head>
 <body>
@@ -599,6 +633,50 @@ body {
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- Edit Modal -->
+<div class="modal-overlay" id="editModal" onclick="closeEditModal(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-title">编辑错题</div>
+    <div class="form-group">
+      <label class="form-label">题目和选项 <span class="req">*</span></label>
+      <textarea class="form-textarea" id="editContent" style="min-height:120px"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">正确答案 <span class="req">*</span></label>
+      <div class="answer-checkboxes" id="editAnswerCheckboxes">
+        <label class="answer-checkbox" data-val="A">A<input type="checkbox" value="A"></label>
+        <label class="answer-checkbox" data-val="B">B<input type="checkbox" value="B"></label>
+        <label class="answer-checkbox" data-val="C">C<input type="checkbox" value="C"></label>
+        <label class="answer-checkbox" data-val="D">D<input type="checkbox" value="D"></label>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">解析</label>
+      <textarea class="form-textarea" id="editAnalysis" style="min-height:70px"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">来源</label>
+      <input type="text" class="form-input" id="editSource">
+    </div>
+    <div class="form-group">
+      <label class="form-label">考点分类</label>
+      <div class="category-selects">
+        <select class="form-select" id="editCatL1"><option value="">一级模块</option></select>
+        <select class="form-select" id="editCatL2"><option value="">二级分类</option></select>
+        <select class="form-select" id="editCatL3"><option value="">三级考点</option></select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">错误类型</label>
+      <select class="form-select" id="editErrorType"><option value="">请选择</option></select>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" onclick="saveEdit()">保存修改</button>
+      <button class="btn btn-secondary" onclick="closeEditModal()">取消</button>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 <script>
@@ -902,6 +980,7 @@ async function saveQuestion() {
   clearForm();
   showToast('保存成功');
   showPage('page-home');
+  autoSyncIfEnabled();
 }
 
 // ==================== 列表 ====================
@@ -931,7 +1010,10 @@ async function renderList() {
     <div class="question-card">
       <div class="question-card-header">
         <span class="category-path">${escapeHtml(catStr)}</span>
-        <button class="delete-btn" onclick="deleteQuestion(${q.id})" title="删除">✕</button>
+        <div class="question-card-header-actions">
+          <button class="edit-btn" onclick="editQuestion(${q.id})" title="编辑">编辑</button>
+          <button class="delete-btn" onclick="deleteQuestion(${q.id})" title="删除">✕</button>
+        </div>
       </div>
       <div class="question-content">${escapeHtml(q.content)}</div>
       <div class="question-meta">
@@ -989,9 +1071,142 @@ function renderListCharts(questions) {
 }
 
 async function deleteQuestion(id) {
+  if (!confirm('确定删除这道错题？')) return;
   await dbDelete(STORE_Q, id);
   showToast('已删除');
   renderList();
+  autoSyncIfEnabled();
+}
+
+// ==================== 编辑错题 ====================
+let editingId = null;
+let editModalInitialized = false;
+
+function initEditModal() {
+  if (editModalInitialized) return;
+  const l1 = document.getElementById('editCatL1');
+  Object.keys(CATEGORY_DATA).forEach(k => {
+    const opt = document.createElement('option');
+    opt.value = k; opt.textContent = k;
+    l1.appendChild(opt);
+  });
+  l1.addEventListener('change', () => {
+    const l2 = document.getElementById('editCatL2');
+    const l3 = document.getElementById('editCatL3');
+    l2.innerHTML = '<option value="">二级分类</option>';
+    l3.innerHTML = '<option value="">三级考点</option>';
+    const subs = CATEGORY_DATA[l1.value];
+    if (subs) Object.keys(subs).forEach(k => {
+      const opt = document.createElement('option');
+      opt.value = k; opt.textContent = k;
+      l2.appendChild(opt);
+    });
+  });
+  document.getElementById('editCatL2').addEventListener('change', () => {
+    const l3 = document.getElementById('editCatL3');
+    l3.innerHTML = '<option value="">三级考点</option>';
+    const l1v = document.getElementById('editCatL1').value;
+    const l2v = document.getElementById('editCatL2').value;
+    if (l1v && l2v && CATEGORY_DATA[l1v] && CATEGORY_DATA[l1v][l2v]) {
+      CATEGORY_DATA[l1v][l2v].forEach(k => {
+        const opt = document.createElement('option');
+        opt.value = k; opt.textContent = k;
+        l3.appendChild(opt);
+      });
+    }
+  });
+  const sel = document.getElementById('editErrorType');
+  ERROR_TYPES.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t; opt.textContent = t;
+    sel.appendChild(opt);
+  });
+  document.querySelectorAll('#editAnswerCheckboxes .answer-checkbox').forEach(label => {
+    label.addEventListener('click', e => {
+      e.preventDefault();
+      label.classList.toggle('checked');
+      const cb = label.querySelector('input');
+      cb.checked = label.classList.contains('checked');
+    });
+  });
+  editModalInitialized = true;
+}
+
+async function editQuestion(id) {
+  const allQ = await dbGetAll(STORE_Q);
+  const q = allQ.find(x => x.id === id);
+  if (!q) { showToast('题目不存在'); return; }
+  initEditModal();
+  editingId = id;
+  document.getElementById('editContent').value = q.content || '';
+  document.getElementById('editAnalysis').value = q.analysis || '';
+  document.getElementById('editSource').value = q.source || '';
+  const l1 = document.getElementById('editCatL1');
+  l1.value = q.category?.level1 || '';
+  l1.dispatchEvent(new Event('change'));
+  document.getElementById('editCatL2').value = q.category?.level2 || '';
+  document.getElementById('editCatL2').dispatchEvent(new Event('change'));
+  document.getElementById('editCatL3').value = q.category?.level3 || '';
+  document.getElementById('editErrorType').value = q.errorType || '';
+  document.querySelectorAll('#editAnswerCheckboxes .answer-checkbox').forEach(l => {
+    l.classList.remove('checked');
+    l.querySelector('input').checked = false;
+  });
+  (q.answer || []).forEach(a => {
+    const label = document.querySelector(`#editAnswerCheckboxes .answer-checkbox[data-val="${a}"]`);
+    if (label) { label.classList.add('checked'); label.querySelector('input').checked = true; }
+  });
+  document.getElementById('editModal').classList.add('show');
+}
+
+function closeEditModal(event) {
+  if (event && event.target !== document.getElementById('editModal')) return;
+  document.getElementById('editModal').classList.remove('show');
+  editingId = null;
+}
+
+async function saveEdit() {
+  if (!editingId) return;
+  const content = document.getElementById('editContent').value.trim();
+  const analysis = document.getElementById('editAnalysis').value.trim();
+  const source = document.getElementById('editSource').value.trim();
+  const catL1 = document.getElementById('editCatL1').value;
+  const catL2 = document.getElementById('editCatL2').value;
+  const catL3 = document.getElementById('editCatL3').value;
+  const errorType = document.getElementById('editErrorType').value;
+  const answers = [];
+  document.querySelectorAll('#editAnswerCheckboxes .answer-checkbox.checked').forEach(l => {
+    answers.push(l.dataset.val);
+  });
+  if (!content) { showToast('题目不能为空'); return; }
+  if (answers.length === 0) { showToast('请至少勾选一个正确答案'); return; }
+  const allQ = await dbGetAll(STORE_Q);
+  const q = allQ.find(x => x.id === editingId);
+  if (!q) { showToast('题目不存在'); return; }
+  q.content = content;
+  q.answer = answers;
+  q.analysis = analysis;
+  q.source = source;
+  q.category = { level1: catL1 || null, level2: catL2 || null, level3: catL3 || null };
+  q.errorType = errorType || null;
+  await dbPut(STORE_Q, q);
+  showToast('修改已保存');
+  closeEditModal();
+  renderList();
+  autoSyncIfEnabled();
+}
+
+async function autoSyncIfEnabled() {
+  const config = getSyncConfig();
+  if (!config.apiKey || !config.syncCode) return;
+  try {
+    const binId = await ensureBinId();
+    let localQ = ensureUUIDs(await dbGetAll(STORE_Q));
+    for (const q of localQ) await dbPut(STORE_Q, q);
+    const localP = await dbGetAll(STORE_P);
+    await putCloudData({ questions: localQ, practiceLogs: localP, updatedAt: Date.now() });
+    localStorage.setItem('jsonbin_last_sync', Date.now().toString());
+  } catch(e) { /* silent fail */ }
 }
 
 // ==================== 错题重做 ====================
