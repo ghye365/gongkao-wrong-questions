@@ -1837,39 +1837,45 @@ async function getCollection(collectionId) {
   return await jsonbinRequest('GET', `/c/${collectionId}/bins`);
 }
 
-// 创建 Collection
+// 创建 Collection（名称通过 header 传递）
 async function createCollection(name) {
-  return await jsonbinRequest('POST', '/c', { name });
-}
-
-// 在 Collection 中创建 Bin
-async function createBinInCollection(collectionId, name, data) {
-  return await jsonbinRequest('POST', `/b/${collectionId}`, data, {
-    'X-Collection-Id': collectionId
-  });
-  // 注意：JSONBin v3 创建带 Collection 的 Bin 需要在 header 中传 X-Collection-Id
-  // 让我们用标准方式：POST /b 并在 body 中传 collectionId
-}
-
-// 修正：用标准方式创建 Bin 并关联 Collection
-async function createBinWithCollection(collectionId, name, data) {
-  const res = await fetch(`${JSONBIN_BASE}/b`, {
+  const config = getSyncConfig();
+  const res = await fetch(`${JSONBIN_BASE}/c`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'X-Master-Key': getSyncConfig().apiKey,
-      'X-Collection-Id': collectionId,
-      'X-Bin-Name': name
-    },
-    body: JSON.stringify(data)
+      'X-Master-Key': config.apiKey,
+      'X-Collection-Name': name
+    }
   });
-  // 计数
   const monthKey = new Date().toISOString().slice(0,7);
   const current = Number(localStorage.getItem('jsonbin_req_' + monthKey) || 0);
   localStorage.setItem('jsonbin_req_' + monthKey, String(current + 1));
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`JSONBin ${res.status}: ${err}`);
+    throw new Error(`创建Collection失败 ${res.status}: ${err}`);
+  }
+  return res.json();
+}
+
+// 创建 Bin 并关联到 Collection
+async function createBinWithCollection(collectionId, name, data) {
+  const config = getSyncConfig();
+  const res = await fetch(`${JSONBIN_BASE}/b`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Master-Key': config.apiKey,
+      'X-Collection-Id': collectionId,
+      'X-Bin-Name': name
+    },
+    body: JSON.stringify(data)
+  });
+  const monthKey = new Date().toISOString().slice(0,7);
+  const current = Number(localStorage.getItem('jsonbin_req_' + monthKey) || 0);
+  localStorage.setItem('jsonbin_req_' + monthKey, String(current + 1));
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`创建Bin失败 ${res.status}: ${err}`);
   }
   return res.json();
 }
@@ -1889,84 +1895,74 @@ async function writeBin(binId, data) {
 async function ensureCollectionAndBins() {
   const config = getSyncConfig();
   if (!config.syncCode) throw new Error('请先填写同步码');
-  syncLog('正在查找云端集合（同步码: ' + config.syncCode + '）...');
+  syncLog('正在查找云端配置（同步码: ' + config.syncCode + '）...');
 
-  // 1. 从 lookup 中找 collectionId
   let collectionId = '';
+  let binIds = {};
+
+  // 1. 从 lookup bin 读取 { syncCode: { collectionId, binIds } }
   try {
     const lookup = await jsonbinRequest('GET', `/b/${SYNC_LOOKUP_BIN}/latest`);
     const map = lookup.record || {};
-    if (map[config.syncCode]) {
-      collectionId = map[config.syncCode];
-      syncLog('找到已有集合: ' + collectionId);
-    }
-  } catch(e) {
-    syncLog('查找集合失败: ' + e.message + '，将创建新集合...');
-  }
-
-  // 2. 如果有 collectionId，读取所有 Bin
-  let binIds = {};
-  if (collectionId) {
-    try {
-      // 尝试从 collection 读取 bin 列表
-      const binsData = await jsonbinRequest('GET', `/c/${collectionId}/bins`);
-      const bins = binsData.records || binsData || [];
-      bins.forEach(b => {
-        const name = b.name || b.snippet?.name || '';
-        if (b.id) binIds[name] = b.id;
-      });
-      syncLog(`集合中共 ${Object.keys(binIds).length} 个 Bin`);
-    } catch(e) {
-      syncLog('读取 Bin 列表失败: ' + e.message);
-    }
-  }
-
-  // 3. 如果没有 collectionId，创建 Collection + 6 个 Bin
-  if (!collectionId) {
-    syncLog('正在创建集合...');
-    const colResult = await createCollection(`gongkao-${config.syncCode}`);
-    collectionId = colResult.metadata?.id || colResult.id || '';
-    if (!collectionId) throw new Error('创建集合失败');
-    syncLog('集合已创建: ' + collectionId);
-
-    // 创建 5 个模块 Bin + 1 个练习记录 Bin
-    const allNames = [...MODULE_NAMES, LOG_BIN_NAME];
-    for (const name of allNames) {
-      const initialData = name === LOG_BIN_NAME ? { practiceLogs: [], stats: {} } : { questions: [] };
-      const result = await createBinWithCollection(collectionId, name, initialData);
-      const bid = result.metadata?.id || result.id || '';
-      if (bid) {
-        binIds[name] = bid;
-        syncLog(`  Bin [${name}] 创建成功`);
+    const entry = map[config.syncCode];
+    if (entry) {
+      if (typeof entry === 'string') {
+        // 旧格式：直接是 collectionId
+        collectionId = entry;
+      } else if (typeof entry === 'object') {
+        // 新格式：{ collectionId, binIds }
+        collectionId = entry.collectionId || '';
+        binIds = entry.binIds || {};
       }
     }
-
-    // 保存到 lookup
-    let lookupMap = {};
-    try {
-      const lookup = await jsonbinRequest('GET', `/b/${SYNC_LOOKUP_BIN}/latest`);
-      lookupMap = lookup.record || {};
-    } catch(e) {}
-    lookupMap[config.syncCode] = collectionId;
-    try { await jsonbinRequest('PUT', `/b/${SYNC_LOOKUP_BIN}`, lookupMap); } catch(e) {}
+    if (collectionId) syncLog('找到已有配置，Collection: ' + collectionId);
+  } catch(e) {
+    syncLog('查找配置失败: ' + e.message);
   }
 
-  // 4. 检查缺失的 Bin，补齐
+  // 2. 如果没有 collectionId，创建 Collection
+  if (!collectionId) {
+    syncLog('正在创建集合...');
+    const colResult = await createCollection('gongkao-' + config.syncCode);
+    collectionId = colResult.record || '';
+    if (!collectionId) throw new Error('创建集合失败：未返回 Collection ID');
+    syncLog('集合已创建: ' + collectionId);
+  }
+
+  // 3. 检查缺失的 Bin，补齐
   const allNames = [...MODULE_NAMES, LOG_BIN_NAME];
   const missing = allNames.filter(n => !binIds[n]);
   if (missing.length > 0) {
-    syncLog(`补齐 ${missing.length} 个缺失的 Bin...`);
+    syncLog(`需要创建 ${missing.length} 个 Bin...`);
     for (const name of missing) {
       const initialData = name === LOG_BIN_NAME ? { practiceLogs: [], stats: {} } : { questions: [] };
       try {
         const result = await createBinWithCollection(collectionId, name, initialData);
-        const bid = result.metadata?.id || result.id || '';
-        if (bid) binIds[name] = bid;
-        syncLog(`  Bin [${name}] 已创建`);
+        const bid = result.metadata?.id || '';
+        if (bid) {
+          binIds[name] = bid;
+          syncLog('  Bin [' + name + '] 创建成功: ' + bid);
+        } else {
+          syncLog('  Bin [' + name + '] 创建异常：未返回 ID');
+        }
       } catch(e) {
-        syncLog(`  Bin [${name}] 创建失败: ` + e.message);
+        syncLog('  Bin [' + name + '] 创建失败: ' + e.message);
       }
     }
+  }
+
+  // 4. 保存到 lookup bin（新格式：包含 binIds 映射）
+  let lookupMap = {};
+  try {
+    const lookup = await jsonbinRequest('GET', `/b/${SYNC_LOOKUP_BIN}/latest`);
+    lookupMap = lookup.record || {};
+  } catch(e) {}
+  lookupMap[config.syncCode] = { collectionId, binIds };
+  try {
+    await jsonbinRequest('PUT', `/b/${SYNC_LOOKUP_BIN}`, lookupMap);
+    syncLog('配置已同步到云端');
+  } catch(e) {
+    syncLog('保存配置到云端失败: ' + e.message);
   }
 
   // 5. 保存到本地
