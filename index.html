@@ -188,6 +188,49 @@ body {
   padding: 1px 8px; border-radius: 10px; font-size: 11px;
 }
 
+/* ===== 错题列表可展开卡片 ===== */
+.qlist-card {
+  background: var(--card-bg); border-radius: var(--radius-sm); padding: 10px 12px;
+  box-shadow: var(--shadow); border: 1px solid var(--border);
+  cursor: pointer; transition: border-color 0.2s;
+}
+.qlist-card:hover { border-color: var(--primary-light); }
+.qlist-card.expanded { border-color: var(--primary); }
+.qlist-card-header {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
+}
+.qlist-card-info { flex: 1; min-width: 0; }
+.qlist-card-preview {
+  font-size: 12px; line-height: 1.5; color: var(--text); margin-top: 4px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; text-overflow: ellipsis; white-space: pre-wrap; word-break: break-word;
+}
+.qlist-card.expanded .qlist-card-preview {
+  -webkit-line-clamp: unset; display: block; overflow: visible;
+}
+.expand-arrow {
+  flex-shrink: 0; font-size: 12px; color: var(--text-secondary);
+  transition: transform 0.2s; padding: 2px 4px;
+}
+.qlist-card.expanded .expand-arrow { transform: rotate(90deg); }
+.qlist-card-body {
+  display: none; margin-top: 8px; padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+.qlist-card.expanded .qlist-card-body { display: block; }
+.qlist-section { margin-bottom: 6px; }
+.qlist-section:last-child { margin-bottom: 0; }
+.qlist-section-label {
+  font-size: 10px; font-weight: 600; color: var(--text-secondary); margin-bottom: 2px;
+}
+.qlist-section-text {
+  font-size: 12px; line-height: 1.5; color: var(--text);
+  white-space: pre-wrap; word-break: break-word;
+}
+.qlist-card-actions {
+  display: flex; gap: 6px; justify-content: flex-end; margin-top: 6px;
+}
+
 /* ===== Stats Drill-down ===== */
 .stats-breadcrumb {
   display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text-secondary);
@@ -298,6 +341,10 @@ body {
   .page-header .subtitle { font-size: 12px; }
   /* 错题列表单列 */
   .question-list-grid { display: block; }
+  .qlist-card { padding: 8px 10px; }
+  .qlist-card-preview { font-size: 11px; -webkit-line-clamp: 2; }
+  .qlist-section-text { font-size: 11px; }
+  .qlist-section-label { font-size: 9px; }
   /* 报告页单列 */
   .report-charts-grid { display: block; }
   /* 同步页堆叠 */
@@ -309,7 +356,11 @@ body {
   .container { max-width: 1100px; margin: 0 auto; }
   /* 首页：错题列表双列 */
   .question-list-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .question-list-grid .question-card { margin-bottom: 0; }
+  .question-list-grid .qlist-card { margin-bottom: 0; }
+  .qlist-card { padding: 14px 16px; }
+  .qlist-card-preview { font-size: 13px; }
+  .qlist-section-text { font-size: 13px; }
+  .qlist-section-label { font-size: 11px; }
   /* 报告页：三栏并排 */
   .report-charts-grid { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; }
   .report-charts-grid .chart-card { margin-bottom: 0; }
@@ -674,6 +725,7 @@ body {
   <div class="navbar-brand">公考错题本</div>
   <div class="nav-tabs">
     <button class="nav-tab active" data-page="page-home" onclick="showPage('page-home')">首页</button>
+    <button class="nav-tab" data-page="page-qlist" onclick="showPage('page-qlist')">错题列表</button>
     <button class="nav-tab" data-page="page-input" onclick="showPage('page-input')">录入错题</button>
     <button class="nav-tab" data-page="page-redo" onclick="showPage('page-redo')">错题重做</button>
     <button class="nav-tab" data-page="page-report" onclick="showPage('page-report')">分析报告</button>
@@ -682,13 +734,19 @@ body {
   </div>
 </nav>
 
-<!-- ===== Home Page (含统计概览 + 错题列表) ===== -->
+<!-- ===== Home Page (统计概览 + 图表) ===== -->
 <div id="page-home" class="page active">
   <div class="container">
     <div class="stats-grid" id="homeStatsGrid"></div>
-    <div class="list-toolbar" style="margin-top:12px">
-      <div class="list-count">共 <span id="listTotal">0</span> 道错题</div>
-      <select class="list-filter" id="listFilter" onchange="renderList()">
+    <!-- 各模块题量分布 - 柱状图（工具栏上方，单独一行） -->
+    <div class="chart-card" id="chartModuleBarCard" style="margin-top:8px">
+      <h3>各模块题量分布</h3>
+      <div class="chart-box" id="chartModuleBar"></div>
+    </div>
+    <!-- 工具栏 -->
+    <div class="list-toolbar">
+      <div class="list-count">共 <span id="homeListTotal">0</span> 道错题</div>
+      <select class="list-filter" id="homeFilter" onchange="renderHomeCharts()">
         <option value="">全部模块</option>
         <option value="常识判断">常识判断</option>
         <option value="言语理解与表达">言语理解与表达</option>
@@ -697,17 +755,35 @@ body {
         <option value="资料分析">资料分析</option>
       </select>
     </div>
-    <div class="list-charts" id="listChartsArea">
+    <!-- 双饼图区（受工具栏筛选影响） -->
+    <div class="list-charts" id="homeChartsArea">
       <div class="chart-card">
-        <h3>各模块题量分布</h3>
-        <div class="chart-box" id="chartModulePie"></div>
+        <h3>二级考点题量分布</h3>
+        <div class="chart-box" id="chartL2Pie"></div>
       </div>
       <div class="chart-card">
-        <h3>错误类型分布</h3>
-        <div class="chart-box" id="chartErrorBar"></div>
+        <h3>三级考点题量分布</h3>
+        <div class="chart-box" id="chartL3Pie"></div>
       </div>
     </div>
-    <div class="question-list-grid" id="questionList"></div>
+  </div>
+</div>
+
+<!-- ===== 错题列表 Page ===== -->
+<div id="page-qlist" class="page">
+  <div class="container">
+    <div class="list-toolbar">
+      <div class="list-count">共 <span id="qlistTotal">0</span> 道错题</div>
+      <select class="list-filter" id="qlistFilter" onchange="renderQList()">
+        <option value="">全部模块</option>
+        <option value="常识判断">常识判断</option>
+        <option value="言语理解与表达">言语理解与表达</option>
+        <option value="数量关系">数量关系</option>
+        <option value="判断推理">判断推理</option>
+        <option value="资料分析">资料分析</option>
+      </select>
+    </div>
+    <div class="question-list-grid" id="questionListPage"></div>
   </div>
 </div>
 
@@ -1165,7 +1241,8 @@ function showPage(pageId) {
   if (tab) tab.classList.add('active');
   window.scrollTo(0, 0);
   switch (pageId) {
-    case 'page-home': renderHome(); renderList(); break;
+    case 'page-home': renderHome(); renderHomeCharts(); break;
+    case 'page-qlist': renderQList(); break;
     case 'page-input': initInputPage(); break;
     case 'page-redo': initRedoPage(); break;
     case 'page-report': renderReport(); break;
@@ -1301,20 +1378,106 @@ async function saveQuestion() {
   autoSyncIfEnabled();
 }
 
-// ==================== 列表 ====================
-async function renderList() {
+// ==================== 首页图表 ====================
+async function renderHomeCharts() {
   const allQ = await dbGetAll(STORE_Q);
-  const filter = document.getElementById('listFilter').value;
+  const filter = document.getElementById('homeFilter').value;
+
+  // 柱状图：各模块题量分布（全量，不筛选）
+  const barCard = document.getElementById('chartModuleBarCard');
+  if (allQ.length === 0) {
+    barCard.style.display = 'none';
+  } else {
+    barCard.style.display = 'block';
+    const moduleCount = {};
+    allQ.forEach(q => {
+      const m = (q.category && q.category.level1) || '未分类';
+      moduleCount[m] = (moduleCount[m] || 0) + 1;
+    });
+    const moduleEntries = Object.entries(moduleCount);
+    const barColors = ['#4f7cfa','#10b981','#f97316','#8b5cf6','#ec4899','#06b6d4'];
+    if (charts.moduleBar) charts.moduleBar.dispose();
+    charts.moduleBar = echarts.init(document.getElementById('chartModuleBar'));
+    charts.moduleBar.setOption({
+      tooltip: { trigger: 'axis', formatter: '{b}: {c}题' },
+      xAxis: { type: 'category', data: moduleEntries.map(e => e[0]), axisLabel: { fontSize: 11, interval: 0 } },
+      yAxis: { type: 'value', minInterval: 1, show: false },
+      series: [{
+        type: 'bar',
+        data: moduleEntries.map((e, i) => ({
+          value: e[1],
+          itemStyle: {
+            color: filter && e[0] !== filter ? '#d0d0d0' : barColors[i % barColors.length],
+            borderRadius: [4,4,0,0]
+          }
+        })),
+        barWidth: '50%',
+        label: { show: true, position: 'top', fontSize: 11, color: '#2C2C2C', formatter: '{c}' }
+      }],
+      grid: { left: 20, right: 20, bottom: 5, top: 20 }
+    });
+  }
+
+  // 筛选后的题目
+  const filteredQ = filter ? allQ.filter(q => q.category && q.category.level1 === filter) : allQ;
+  document.getElementById('homeListTotal').textContent = filteredQ.length;
+
+  const chartsArea = document.getElementById('homeChartsArea');
+  if (filteredQ.length === 0) {
+    chartsArea.style.display = 'none';
+    return;
+  }
+  chartsArea.style.display = 'grid';
+
+  // 饼图：二级考点题量分布
+  const l2Count = {};
+  filteredQ.forEach(q => {
+    const l2 = (q.category && q.category.level2) || '未分类';
+    l2Count[l2] = (l2Count[l2] || 0) + 1;
+  });
+  const l2Entries = Object.entries(l2Count);
+  if (charts.l2Pie) charts.l2Pie.dispose();
+  charts.l2Pie = echarts.init(document.getElementById('chartL2Pie'));
+  charts.l2Pie.setOption({
+    tooltip: { trigger: 'item', formatter: '{b}: {c}题 ({d}%)' },
+    color: ['#4f7cfa','#10b981','#f97316','#8b5cf6','#ec4899','#06b6d4','#f59e0b','#3b82f6'],
+    series: [{
+      type: 'pie', radius: ['35%','65%'],
+      label: { fontSize: 10, color: '#2C2C2C', formatter: '{b}\n{c}题' },
+      data: l2Entries.map(([k,v]) => ({ name: k, value: v }))
+    }]
+  });
+
+  // 饼图：三级考点题量分布
+  const l3Count = {};
+  filteredQ.forEach(q => {
+    const l3 = (q.category && q.category.level3) || '未分类';
+    l3Count[l3] = (l3Count[l3] || 0) + 1;
+  });
+  const l3Entries = Object.entries(l3Count);
+  if (charts.l3Pie) charts.l3Pie.dispose();
+  charts.l3Pie = echarts.init(document.getElementById('chartL3Pie'));
+  charts.l3Pie.setOption({
+    tooltip: { trigger: 'item', formatter: '{b}: {c}题 ({d}%)' },
+    color: ['#06b6d4','#ec4899','#f59e0b','#3b82f6','#10b981','#8b5cf6','#f97316','#4f7cfa'],
+    series: [{
+      type: 'pie', radius: ['35%','65%'],
+      label: { fontSize: 10, color: '#2C2C2C', formatter: '{b}\n{c}题' },
+      data: l3Entries.map(([k,v]) => ({ name: k, value: v }))
+    }]
+  });
+}
+
+// ==================== 错题列表页 ====================
+async function renderQList() {
+  const allQ = await dbGetAll(STORE_Q);
+  const filter = document.getElementById('qlistFilter').value;
   const questions = filter ? allQ.filter(q => q.category && q.category.level1 === filter) : allQ;
   questions.sort((a, b) => b.createTime - a.createTime);
 
-  document.getElementById('listTotal').textContent = questions.length;
+  document.getElementById('qlistTotal').textContent = questions.length;
 
-  // charts
-  renderListCharts(allQ);
-
-  // list
-  const container = document.getElementById('questionList');
+  const container = document.getElementById('questionListPage');
   if (questions.length === 0) {
     container.innerHTML = '<div class="empty-hint">暂无错题，去<a onclick="showPage(\'page-input\')">录入第一道错题</a>吧</div>';
     return;
@@ -1325,74 +1488,57 @@ async function renderList() {
     const catStr = catParts.length > 0 ? catParts.join(' › ') : '未分类';
     const ans = (q.answer || []).map(a => `<span class="answer-badge">${a}</span>`).join(' ');
     return `
-    <div class="question-card">
-      <div class="question-card-header">
-        <span class="category-path">${escapeHtml(catStr)}</span>
-        <div class="question-card-header-actions">
-          <button class="edit-btn" onclick="editQuestion(${q.id})" title="编辑">编辑</button>
-          <button class="delete-btn" onclick="deleteQuestion(${q.id})" title="删除">✕</button>
+    <div class="qlist-card" onclick="toggleQCard(this)">
+      <div class="qlist-card-header">
+        <div class="qlist-card-info">
+          <span class="category-path">${escapeHtml(catStr)}</span>
+          <div class="qlist-card-preview">${escapeHtml(q.content)}</div>
         </div>
+        <span class="expand-arrow">▶</span>
       </div>
-      <div class="question-content">${escapeHtml(q.content)}</div>
-      <div class="question-meta">
-        <div>正确答案：${ans}</div>
-        ${q.errorType ? `<div><span class="tag">${escapeHtml(q.errorType)}</span></div>` : ''}
-        ${q.source ? `<div>来源：${escapeHtml(q.source)}</div>` : ''}
-        <div>录入：${formatDateTime(q.createTime)}</div>
+      <div class="qlist-card-body" onclick="event.stopPropagation()">
+        <div class="qlist-section">
+          <div class="qlist-section-label">📝 题目</div>
+          <div class="qlist-section-text">${escapeHtml(q.content)}</div>
+        </div>
+        <div class="qlist-section">
+          <div class="qlist-section-label">✓ 正确答案</div>
+          ${ans}
+        </div>
+        ${q.analysis ? `<div class="qlist-section">
+          <div class="qlist-section-label">💡 解析</div>
+          <div class="qlist-section-text">${escapeHtml(q.analysis)}</div>
+        </div>` : ''}
+        ${q.errorType ? `<div class="qlist-section">
+          <div class="qlist-section-label">错误类型</div>
+          <span class="tag">${escapeHtml(q.errorType)}</span>
+        </div>` : ''}
+        ${q.source ? `<div class="qlist-section">
+          <div class="qlist-section-label">来源</div>
+          <div class="qlist-section-text">${escapeHtml(q.source)}</div>
+        </div>` : ''}
+        <div class="qlist-section">
+          <div class="qlist-section-label">录入时间</div>
+          <div class="qlist-section-text">${formatDateTime(q.createTime)}</div>
+        </div>
+        <div class="qlist-card-actions">
+          <button class="edit-btn" onclick="event.stopPropagation();editQuestion(${q.id})">编辑</button>
+          <button class="delete-btn" onclick="event.stopPropagation();deleteQuestion(${q.id})" title="删除">✕</button>
+        </div>
       </div>
     </div>`;
   }).join('');
 }
 
-function renderListCharts(questions) {
-  const chartsArea = document.getElementById('listChartsArea');
-  if (questions.length === 0) {
-    chartsArea.style.display = 'none';
-    return;
-  }
-  chartsArea.style.display = 'grid';
-
-  // pie: module distribution
-  const moduleCount = {};
-  questions.forEach(q => {
-    const m = (q.category && q.category.level1) || '未分类';
-    moduleCount[m] = (moduleCount[m] || 0) + 1;
-  });
-  if (charts.pie) charts.pie.dispose();
-  charts.pie = echarts.init(document.getElementById('chartModulePie'));
-  charts.pie.setOption({
-    tooltip: { trigger: 'item', formatter: '{b}: {c}题 ({d}%)' },
-    color: ['#D4A5A5','#E8C5C5','#C99696','#F0D5D5','#B88686','#DCC0C0'],
-    series: [{
-      type: 'pie', radius: ['40%','70%'],
-      label: { fontSize: 12, color: '#2C2C2C' },
-      data: Object.entries(moduleCount).map(([k,v]) => ({ name: k, value: v }))
-    }]
-  });
-
-  // bar: error type distribution
-  const errCount = {};
-  questions.forEach(q => {
-    const t = q.errorType || '未标注';
-    errCount[t] = (errCount[t] || 0) + 1;
-  });
-  const errEntries = Object.entries(errCount).sort((a,b) => b[1]-a[1]);
-  if (charts.bar) charts.bar.dispose();
-  charts.bar = echarts.init(document.getElementById('chartErrorBar'));
-  charts.bar.setOption({
-    tooltip: { trigger: 'axis' },
-    xAxis: { type: 'category', data: errEntries.map(e => e[0]), axisLabel: { fontSize: 11, rotate: 25 } },
-    yAxis: { type: 'value', minInterval: 1 },
-    series: [{ type: 'bar', data: errEntries.map(e => e[1]), itemStyle: { color: '#D4A5A5', borderRadius: [4,4,0,0] } }],
-    grid: { left: 30, right: 16, bottom: 40, top: 16 }
-  });
+function toggleQCard(card) {
+  card.classList.toggle('expanded');
 }
 
 async function deleteQuestion(id) {
   if (!confirm('确定删除这道错题？')) return;
   await dbDelete(STORE_Q, id);
   showToast('已删除');
-  renderList();
+  renderQList();
   autoSyncIfEnabled();
 }
 
@@ -1510,7 +1656,7 @@ async function saveEdit() {
   await dbPut(STORE_Q, q);
   showToast('修改已保存');
   closeEditModal();
-  renderList();
+  renderQList();
   autoSyncIfEnabled();
 }
 
@@ -2387,7 +2533,7 @@ async function init() {
   try {
     db = await openDB();
     renderHome();
-    renderList();
+    renderHomeCharts();
   } catch (e) {
     console.error('DB init failed:', e);
     showToast('数据库初始化失败，请检查浏览器是否支持 IndexedDB');
