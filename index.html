@@ -150,14 +150,14 @@ body {
   font-size: 12px; background: #fff; color: var(--text);
 }
 .list-charts {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;
+  display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px;
 }
 .chart-card {
   background: var(--card-bg); border-radius: var(--radius-sm); padding: 8px 10px;
   box-shadow: var(--shadow); border: 1px solid var(--border);
 }
 .chart-card h3 { font-size: 11px; margin-bottom: 4px; color: var(--text-secondary); }
-.chart-box { width: 100%; height: 120px; }
+.chart-box { width: 100%; height: 160px; }
 .question-card {
   background: var(--card-bg); border-radius: var(--radius-sm); padding: 10px 12px;
   box-shadow: var(--shadow); border: 1px solid var(--border); margin-bottom: 6px;
@@ -328,8 +328,8 @@ body {
   .stat-card { padding: 8px 4px; }
   .stat-card-value { font-size: 15px; }
   .stat-card-label { font-size: 9px; }
-  .list-charts { grid-template-columns: 1fr 1fr; gap: 6px; }
-  .chart-box { height: 100px; }
+  .list-charts { gap: 6px; }
+  .chart-box { height: 140px; }
   .quiz-options { grid-template-columns: 1fr; }
   .category-selects { flex-direction: column; }
   .category-selects .form-select { min-width: 100%; }
@@ -369,7 +369,7 @@ body {
   .sync-grid .sync-card { margin-bottom: 0; }
   .sync-log { max-height: 200px; }
   /* 图表高度增大 */
-  .chart-box { height: 160px; }
+  .chart-box { height: 200px; }
   /* 统计卡片放大 */
   .stat-card { padding: 16px 12px; }
   .stat-card-value { font-size: 24px; }
