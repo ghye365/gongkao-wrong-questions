@@ -1395,7 +1395,7 @@ async function renderHomeCharts() {
       moduleCount[m] = (moduleCount[m] || 0) + 1;
     });
     const moduleEntries = Object.entries(moduleCount);
-    const barColors = ['#4f7cfa','#10b981','#f97316','#8b5cf6','#ec4899','#06b6d4'];
+    const barColors = ['#D4A5A5','#C9B1A5','#A5B4C4','#C4B5D4','#D4C5A5','#B5C4A5'];
     if (charts.moduleBar) charts.moduleBar.dispose();
     charts.moduleBar = echarts.init(document.getElementById('chartModuleBar'));
     charts.moduleBar.setOption({
@@ -1407,7 +1407,7 @@ async function renderHomeCharts() {
         data: moduleEntries.map((e, i) => ({
           value: e[1],
           itemStyle: {
-            color: filter && e[0] !== filter ? '#d0d0d0' : barColors[i % barColors.length],
+            color: filter && e[0] !== filter ? '#EAD5D5' : barColors[i % barColors.length],
             borderRadius: [4,4,0,0]
           }
         })),
@@ -1440,7 +1440,7 @@ async function renderHomeCharts() {
   charts.l2Pie = echarts.init(document.getElementById('chartL2Pie'));
   charts.l2Pie.setOption({
     tooltip: { trigger: 'item', formatter: '{b}: {c}题 ({d}%)' },
-    color: ['#4f7cfa','#10b981','#f97316','#8b5cf6','#ec4899','#06b6d4','#f59e0b','#3b82f6'],
+    color: ['#D4A5A5','#C9B1A5','#A5B4C4','#C4B5D4','#D4C5A5','#B5C4A5','#E0C5C5','#B5B5C4'],
     series: [{
       type: 'pie', radius: ['35%','65%'],
       label: { fontSize: 10, color: '#2C2C2C', formatter: '{b}\n{c}题' },
@@ -1459,7 +1459,7 @@ async function renderHomeCharts() {
   charts.l3Pie = echarts.init(document.getElementById('chartL3Pie'));
   charts.l3Pie.setOption({
     tooltip: { trigger: 'item', formatter: '{b}: {c}题 ({d}%)' },
-    color: ['#06b6d4','#ec4899','#f59e0b','#3b82f6','#10b981','#8b5cf6','#f97316','#4f7cfa'],
+    color: ['#D4A5A5','#C9B1A5','#A5B4C4','#C4B5D4','#D4C5A5','#B5C4A5','#E0C5C5','#B5B5C4'],
     series: [{
       type: 'pie', radius: ['35%','65%'],
       label: { fontSize: 10, color: '#2C2C2C', formatter: '{b}\n{c}题' },
